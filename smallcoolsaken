@@ -2,268 +2,458 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
 local UIS = game:GetService("UserInputService")
-
 local lp = Players.LocalPlayer
 
 local Sprinting = ReplicatedStorage.Systems.Character.Game.Sprinting
 local stamina = require(Sprinting)
-
 stamina.MaxStamina = 100
 stamina.MinStamina = -20
 stamina.StaminaGain = 100
 stamina.StaminaLoss = 5
-stamina.SprintSpeed = 40
+stamina.SprintSpeed = 28
 stamina.StaminaLossDisabled = true
 
+-- GUI
 local gui = Instance.new("ScreenGui")
 gui.Name = "UtilityGui"
 gui.ResetOnSpawn = false
 gui.Parent = lp.PlayerGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0,200,0,150)
-mainFrame.Position = UDim2.new(0,10,0,10)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+mainFrame.Size = UDim2.new(0, 200, 0, 280)
+mainFrame.Position = UDim2.new(0, 10, 0, 10)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 mainFrame.BackgroundTransparency = 0.15
-mainFrame.BorderColor3 = Color3.fromRGB(255,0,0)
+mainFrame.BorderColor3 = Color3.fromRGB(255, 0, 0)
 mainFrame.BorderSizePixel = 2
 mainFrame.Active = true
 mainFrame.Parent = gui
 
-local function Button(text,y)
-	local b=Instance.new("TextButton")
-	b.Size=UDim2.new(0,180,0,26)
-	b.Position=UDim2.new(0,10,0,y)
-	b.BackgroundColor3=Color3.fromRGB(0,0,0)
-	b.BorderColor3=Color3.fromRGB(255,0,0)
-	b.BorderSizePixel=2
-	b.TextColor3=Color3.new(1,1,1)
-	b.Font=Enum.Font.SourceSansBold
-	b.TextSize=16
-	b.Text=text
-	b.Parent=mainFrame
+local function Button(text, y)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(0, 180, 0, 26)
+	b.Position = UDim2.new(0, 10, 0, y)
+	b.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	b.BorderColor3 = Color3.fromRGB(255, 0, 0)
+	b.BorderSizePixel = 2
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.Font = Enum.Font.SourceSansBold
+	b.TextSize = 16
+	b.Text = text
+	b.Parent = mainFrame
 	return b
 end
 
-local function Label(text,y)
-	local l=Instance.new("TextLabel")
-	l.Size=UDim2.new(0,180,0,16)
-	l.Position=UDim2.new(0,10,0,y)
-	l.BackgroundTransparency=1
-	l.TextColor3=Color3.new(1,1,1)
-	l.Font=Enum.Font.SourceSans
-	l.TextSize=15
-	l.Text=text
-	l.Parent=mainFrame
+local function Label(text, y)
+	local l = Instance.new("TextLabel")
+	l.Size = UDim2.new(0, 180, 0, 16)
+	l.Position = UDim2.new(0, 10, 0, y)
+	l.BackgroundTransparency = 1
+	l.TextColor3 = Color3.new(1, 1, 1)
+	l.Font = Enum.Font.SourceSans
+	l.TextSize = 15
+	l.Text = text
+	l.Parent = mainFrame
 	return l
 end
 
-local function TextBox(default,y)
-	local t=Instance.new("TextBox")
-	t.Size=UDim2.new(0,180,0,22)
-	t.Position=UDim2.new(0,10,0,y)
-	t.BackgroundColor3=Color3.fromRGB(0,0,0)
-	t.BorderColor3=Color3.fromRGB(255,0,0)
-	t.BorderSizePixel=2
-	t.TextColor3=Color3.new(1,1,1)
-	t.Font=Enum.Font.SourceSans
-	t.TextSize=15
-	t.Text=tostring(default)
-	t.ClearTextOnFocus=false
-	t.Parent=mainFrame
+local function TextBox(default, y)
+	local t = Instance.new("TextBox")
+	t.Size = UDim2.new(0, 180, 0, 22)
+	t.Position = UDim2.new(0, 10, 0, y)
+	t.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	t.BorderColor3 = Color3.fromRGB(255, 0, 0)
+	t.BorderSizePixel = 2
+	t.TextColor3 = Color3.new(1, 1, 1)
+	t.Font = Enum.Font.SourceSans
+	t.TextSize = 15
+	t.Text = tostring(default)
+	t.ClearTextOnFocus = false
+	t.Parent = mainFrame
 	return t
 end
 
-local infButton=Button("Inf Stamina: OFF",8)
-local espButton=Button("ESP: OFF",36)
-local jumpButton=Button("Jump: OFF",64)
+-- Buttons
+local infButton  = Button("Inf Stamina: OFF", 8)
+local espButton  = Button("ESP: OFF", 36)
+local itemButton = Button("Item ESP: OFF", 64)
+local genButton  = Button("Gen ESP: OFF", 92)
+local jumpButton = Button("Jump: OFF", 120)
+local speedLabel = Label("Sprint Speed", 150)
+local speedBox   = TextBox(stamina.SprintSpeed, 168)
+local keyButton  = Button("Hakari Key: Y", 198)
 
-local speedLabel=Label("Sprint Speed",94)
-local speedBox=TextBox(stamina.SprintSpeed,112)
+local toggleGui = Instance.new("TextButton")
+toggleGui.Size = UDim2.new(0, 22, 0, 22)
+toggleGui.Position = UDim2.new(1, 4, 0, 2)
+toggleGui.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+toggleGui.BorderColor3 = Color3.fromRGB(255, 0, 0)
+toggleGui.BorderSizePixel = 2
+toggleGui.Text = "-"
+toggleGui.TextColor3 = Color3.new(1, 1, 1)
+toggleGui.Font = Enum.Font.SourceSansBold
+toggleGui.TextSize = 18
+toggleGui.Parent = mainFrame
 
-local toggleGui=Instance.new("TextButton")
-toggleGui.Size=UDim2.new(0,22,0,22)
-toggleGui.Position=UDim2.new(1,4,0,2)
-toggleGui.BackgroundColor3=Color3.fromRGB(0,0,0)
-toggleGui.BorderColor3=Color3.fromRGB(255,0,0)
-toggleGui.BorderSizePixel=2
-toggleGui.Text="-"
-toggleGui.TextColor3=Color3.new(1,1,1)
-toggleGui.Font=Enum.Font.SourceSansBold
-toggleGui.TextSize=18
-toggleGui.Parent=mainFrame
+-- States
+local infEnabled = false
+local espEnabled = false
+local showItems = false
+local showGen = false
+local jumpEnabled = false
+local hidden = false
+local hakariKey = Enum.KeyCode.Y
+local waitingForKey = false
 
-local infEnabled=false
-local espEnabled=false
-local jumpEnabled=false
-local hidden=false
-
+-- Infinite stamina + jump loop
 task.spawn(function()
 	while task.wait(0.1) do
 		if infEnabled then
-			stamina.Stamina=stamina.MaxStamina
+			stamina.Stamina = stamina.MaxStamina
 		end
 		if jumpEnabled then
-			local hum=lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+			local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
 			if hum then
-				hum.UseJumpPower=true
-				hum.JumpPower=50
+				hum.UseJumpPower = true
+				hum.JumpPower = 50
 			end
 		end
 	end
 end)
 
+-- Speed box
 speedBox.FocusLost:Connect(function()
-	local n=tonumber(speedBox.Text)
+	local n = tonumber(speedBox.Text)
 	if n then
-		stamina.SprintSpeed=n
+		stamina.SprintSpeed = n
 	else
-		speedBox.Text=tostring(stamina.SprintSpeed)
+		speedBox.Text = tostring(stamina.SprintSpeed)
 	end
 end)
 
+-- Character added
 lp.CharacterAdded:Connect(function(char)
-	local hum=char:WaitForChild("Humanoid")
+	local hum = char:WaitForChild("Humanoid")
 	if jumpEnabled then
-		hum.UseJumpPower=true
-		hum.JumpPower=50
+		hum.UseJumpPower = true
+		hum.JumpPower = 50
 	end
 end)
 
-local PlayersFolder=workspace:WaitForChild("Players")
-local oldLighting={
-	Ambient=Lighting.Ambient,
-	OutdoorAmbient=Lighting.OutdoorAmbient,
-	Brightness=Lighting.Brightness,
-	FogStart=Lighting.FogStart,
-	FogEnd=Lighting.FogEnd
+-- ESP helpers
+local PlayersFolder = workspace:WaitForChild("Players")
+
+local oldLighting = {
+	Ambient = Lighting.Ambient,
+	OutdoorAmbient = Lighting.OutdoorAmbient,
+	Brightness = Lighting.Brightness,
+	FogStart = Lighting.FogStart,
+	FogEnd = Lighting.FogEnd
 }
 
 local function FullBright(b)
 	if b then
-		Lighting.Ambient=Color3.new(1,1,1)
-		Lighting.OutdoorAmbient=Color3.new(1,1,1)
-		Lighting.Brightness=4
-		Lighting.FogStart=0
-		Lighting.FogEnd=1000000
+		Lighting.Ambient = Color3.new(1, 1, 1)
+		Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+		Lighting.Brightness = 4
+		Lighting.FogStart = 0
+		Lighting.FogEnd = 1000000
 	else
-		for k,v in pairs(oldLighting) do
-			Lighting[k]=v
+		for k, v in pairs(oldLighting) do
+			Lighting[k] = v
 		end
 	end
 end
 
-local function ClearESP()
-	for _,v in ipairs(workspace:GetDescendants()) do
-		if v:IsA("Highlight") and v.Name=="ESP_HL" then
+local function addHL(model, color)
+	if not model or not model.Parent then return end
+	local existing = model:FindFirstChild("ESP_HL")
+	if existing then
+		existing.FillColor = color
+		existing.OutlineColor = color
+		return
+	end
+	local h = Instance.new("Highlight")
+	h.Name = "ESP_HL"
+	h.FillTransparency = 0.85
+	h.OutlineTransparency = 0
+	h.FillColor = color
+	h.OutlineColor = color
+	h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	h.Parent = model
+end
+
+local function removeHL(model)
+	local h = model and model:FindFirstChild("ESP_HL")
+	if h then
+		h:Destroy()
+	end
+end
+
+local function ClearAllESP()
+	for _, v in ipairs(workspace:GetDescendants()) do
+		if v:IsA("Highlight") and v.Name == "ESP_HL" then
 			v:Destroy()
 		end
 	end
 end
 
-local function AddESP(model,color)
-	if model:FindFirstChild("Humanoid") and not model:FindFirstChild("ESP_HL") then
-		local h=Instance.new("Highlight")
-		h.Name="ESP_HL"
-		h.FillTransparency=0.9
-		h.FillColor=color
-		h.OutlineColor=color
-		h.Parent=model
-	end
-end
-
+-- Main ESP loop (không chớp)
 task.spawn(function()
-	while task.wait(1) do
+	while task.wait(0.8) do
+		-- Players
 		if espEnabled then
-			ClearESP()
-
 			if PlayersFolder:FindFirstChild("Killers") then
-				for _,v in ipairs(PlayersFolder.Killers:GetChildren()) do
-					AddESP(v,Color3.fromRGB(255,0,0))
+				for _, v in ipairs(PlayersFolder.Killers:GetChildren()) do
+					if v:FindFirstChild("Humanoid") then
+						addHL(v, Color3.fromRGB(255, 0, 0))
+					end
 				end
 			end
-
 			if PlayersFolder:FindFirstChild("Survivors") then
-				for _,v in ipairs(PlayersFolder.Survivors:GetChildren()) do
-					AddESP(v,Color3.fromRGB(0,255,0))
+				for _, v in ipairs(PlayersFolder.Survivors:GetChildren()) do
+					if v:FindFirstChild("Humanoid") then
+						addHL(v, Color3.fromRGB(0, 255, 0))
+					end
+				end
+			end
+		else
+			if PlayersFolder:FindFirstChild("Killers") then
+				for _, v in ipairs(PlayersFolder.Killers:GetChildren()) do
+					removeHL(v)
+				end
+			end
+			if PlayersFolder:FindFirstChild("Survivors") then
+				for _, v in ipairs(PlayersFolder.Survivors:GetChildren()) do
+					removeHL(v)
+				end
+			end
+		end
+
+		-- Items
+		if showItems then
+			for _, i in ipairs(workspace:GetDescendants()) do
+				if i.Name == "Medkit" or i.Name == "BloxyCola" then
+					addHL(i, Color3.fromRGB(180, 0, 255))
+				end
+			end
+		else
+			for _, i in ipairs(workspace:GetDescendants()) do
+				if i.Name == "Medkit" or i.Name == "BloxyCola" then
+					removeHL(i)
+				end
+			end
+		end
+
+		-- Generators
+		if showGen then
+			for _, g in ipairs(workspace:GetDescendants()) do
+				if g.Name:lower():find("generator") then
+					addHL(g, Color3.fromRGB(255, 255, 0))
+				end
+			end
+		else
+			for _, g in ipairs(workspace:GetDescendants()) do
+				if g.Name:lower():find("generator") then
+					removeHL(g)
 				end
 			end
 		end
 	end
 end)
 
+-- Hakari Dance
+local hakariActive = false
+local function ToggleHakariDance(state)
+	local char = lp.Character
+	if not char then return end
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	local rootPart = char:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not rootPart then return end
+
+	if state then
+		hakariActive = true
+		humanoid.PlatformStand = true
+		humanoid.JumpPower = 0
+
+		local bodyVelocity = Instance.new("BodyVelocity")
+		bodyVelocity.Name = "HakariBV"
+		bodyVelocity.MaxForce = Vector3.new(100000, 100000, 100000)
+		bodyVelocity.Velocity = Vector3.zero
+		bodyVelocity.Parent = rootPart
+
+		local animation = Instance.new("Animation")
+		animation.AnimationId = "rbxassetid://138019937280193"
+		local animationTrack = humanoid:LoadAnimation(animation)
+		animationTrack:Play()
+
+		local sound = Instance.new("Sound")
+		sound.Name = "HakariSound"
+		sound.SoundId = "rbxassetid://87166578676888"
+		sound.Parent = rootPart
+		sound.Volume = 0.5
+		sound.Looped = true
+		sound:Play()
+
+		pcall(function()
+			local effect = ReplicatedStorage.Assets.Emotes.HakariDance.HakariBeamEffect:Clone()
+			effect.Name = "PlayerEmoteVFX"
+			effect.CFrame = char.PrimaryPart.CFrame * CFrame.new(0, -1, -0.3)
+			effect.WeldConstraint.Part0 = char.PrimaryPart
+			effect.WeldConstraint.Part1 = effect
+			effect.Parent = char
+			effect.CanCollide = false
+		end)
+
+		pcall(function()
+			local args = {"PlayEmote", "Animations", "HakariDance"}
+			ReplicatedStorage.Modules.Network.RemoteEvent:FireServer(unpack(args))
+		end)
+
+		animationTrack.Stopped:Connect(function()
+			if not hakariActive then
+				humanoid.PlatformStand = false
+				local bv = rootPart:FindFirstChild("HakariBV")
+				if bv then bv:Destroy() end
+			end
+		end)
+	else
+		hakariActive = false
+		humanoid.PlatformStand = false
+		humanoid.JumpPower = 50
+
+		local bv = rootPart:FindFirstChild("HakariBV")
+		if bv then bv:Destroy() end
+
+		local sound = rootPart:FindFirstChild("HakariSound")
+		if sound then
+			sound:Stop()
+			sound:Destroy()
+		end
+
+		local effect = char:FindFirstChild("PlayerEmoteVFX")
+		if effect then effect:Destroy() end
+
+		for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+			if track.Animation.AnimationId == "rbxassetid://138019937280193" then
+				track:Stop()
+			end
+		end
+	end
+end
+
+-- Toggle GUI
 local function ToggleGUI()
-	hidden=not hidden
-	infButton.Visible=not hidden
-	espButton.Visible=not hidden
-	jumpButton.Visible=not hidden
-	speedLabel.Visible=not hidden
-	speedBox.Visible=not hidden
-	mainFrame.Size=hidden and UDim2.new(0,200,0,28) or UDim2.new(0,200,0,150)
-	toggleGui.Text=hidden and "+" or "-"
+	hidden = not hidden
+	infButton.Visible = not hidden
+	espButton.Visible = not hidden
+	itemButton.Visible = not hidden
+	genButton.Visible = not hidden
+	jumpButton.Visible = not hidden
+	speedLabel.Visible = not hidden
+	speedBox.Visible = not hidden
+	keyButton.Visible = not hidden
+	mainFrame.Size = hidden and UDim2.new(0, 200, 0, 28) or UDim2.new(0, 200, 0, 280)
+	toggleGui.Text = hidden and "+" or "-"
 end
 
 toggleGui.MouseButton1Click:Connect(ToggleGUI)
 
-UIS.InputBegan:Connect(function(input,gp)
+-- Input
+UIS.InputBegan:Connect(function(input, gp)
 	if gp then return end
-	if input.KeyCode==Enum.KeyCode.RightShift then
+
+	if waitingForKey then
+		if input.UserInputType == Enum.UserInputType.Keyboard then
+			hakariKey = input.KeyCode
+			keyButton.Text = "Hakari Key: " .. input.KeyCode.Name
+			waitingForKey = false
+			keyButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+		end
+		return
+	end
+
+	if input.KeyCode == Enum.KeyCode.RightShift then
 		ToggleGUI()
+	elseif input.KeyCode == hakariKey then
+		ToggleHakariDance(not hakariActive)
 	end
 end)
 
-local dragging=false
+-- Drag
+local dragging = false
 local dragStart
 local startPos
 
 mainFrame.InputBegan:Connect(function(input)
-	if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-		dragging=true
-		dragStart=input.Position
-		startPos=mainFrame.Position
-
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = mainFrame.Position
 		input.Changed:Connect(function()
-			if input.UserInputState==Enum.UserInputState.End then
-				dragging=false
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
 			end
 		end)
 	end
 end)
 
 UIS.InputChanged:Connect(function(input)
-	if dragging and (input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch) then
-		local delta=input.Position-dragStart
-		mainFrame.Position=UDim2.new(
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStart
+		mainFrame.Position = UDim2.new(
 			startPos.X.Scale,
-			startPos.X.Offset+delta.X,
+			startPos.X.Offset + delta.X,
 			startPos.Y.Scale,
-			startPos.Y.Offset+delta.Y
+			startPos.Y.Offset + delta.Y
 		)
 	end
 end)
 
+-- Button callbacks
 infButton.MouseButton1Click:Connect(function()
-	infEnabled=not infEnabled
-	stamina.StaminaLossDisabled=infEnabled
-	infButton.Text="Inf Stamina: "..(infEnabled and "ON" or "OFF")
+	infEnabled = not infEnabled
+	stamina.StaminaLossDisabled = infEnabled
+	infButton.Text = "Inf Stamina: " .. (infEnabled and "ON" or "OFF")
 end)
 
 espButton.MouseButton1Click:Connect(function()
-	espEnabled=not espEnabled
-	espButton.Text="ESP: "..(espEnabled and "ON" or "OFF")
+	espEnabled = not espEnabled
+	espButton.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
 	FullBright(espEnabled)
-	if not espEnabled then
-		ClearESP()
+	if not espEnabled and not showItems and not showGen then
+		ClearAllESP()
+	end
+end)
+
+itemButton.MouseButton1Click:Connect(function()
+	showItems = not showItems
+	itemButton.Text = "Item ESP: " .. (showItems and "ON" or "OFF")
+	if not espEnabled and not showItems and not showGen then
+		ClearAllESP()
+	end
+end)
+
+genButton.MouseButton1Click:Connect(function()
+	showGen = not showGen
+	genButton.Text = "Gen ESP: " .. (showGen and "ON" or "OFF")
+	if not espEnabled and not showItems and not showGen then
+		ClearAllESP()
 	end
 end)
 
 jumpButton.MouseButton1Click:Connect(function()
-	jumpEnabled=not jumpEnabled
-	jumpButton.Text="Jump: "..(jumpEnabled and "ON" or "OFF")
-
-	local hum=lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+	jumpEnabled = not jumpEnabled
+	jumpButton.Text = "Jump: " .. (jumpEnabled and "ON" or "OFF")
+	local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
 	if hum then
-		hum.UseJumpPower=true
-		hum.JumpPower=jumpEnabled and 50 or 0
+		hum.UseJumpPower = true
+		hum.JumpPower = jumpEnabled and 50 or 0
 	end
+end)
+
+keyButton.MouseButton1Click:Connect(function()
+	waitingForKey = true
+	keyButton.Text = "Press any key..."
+	keyButton.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
 end)
