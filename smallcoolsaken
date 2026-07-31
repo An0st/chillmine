@@ -10,7 +10,7 @@ stamina.MaxStamina = 100
 stamina.MinStamina = -20
 stamina.StaminaGain = 100
 stamina.StaminaLoss = 5
-stamina.SprintSpeed = 28
+stamina.SprintSpeed = 28.6
 stamina.StaminaLossDisabled = true
 
 -- GUI
@@ -82,6 +82,19 @@ local jumpButton = Button("Jump: OFF", 120)
 local speedLabel = Label("Sprint Speed", 150)
 local speedBox   = TextBox(stamina.SprintSpeed, 168)
 local keyButton  = Button("Hakari Key: B", 198)
+
+-- Title khi thu nhỏ
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, -30, 0, 24)
+titleLabel.Position = UDim2.new(0, 6, 0, 2)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "c00lgui"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.TextSize = 18
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Visible = false
+titleLabel.Parent = mainFrame
 
 local toggleGui = Instance.new("TextButton")
 toggleGui.Size = UDim2.new(0, 22, 0, 22)
@@ -353,6 +366,7 @@ local function ToggleGUI()
 	speedLabel.Visible = not hidden
 	speedBox.Visible = not hidden
 	keyButton.Visible = not hidden
+	titleLabel.Visible = hidden
 	mainFrame.Size = hidden and UDim2.new(0, 200, 0, 28) or UDim2.new(0, 200, 0, 280)
 	toggleGui.Text = hidden and "+" or "-"
 end
