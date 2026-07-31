@@ -81,7 +81,7 @@ local genButton  = Button("Gen ESP: OFF", 92)
 local jumpButton = Button("Jump: OFF", 120)
 local speedLabel = Label("Sprint Speed", 150)
 local speedBox   = TextBox(stamina.SprintSpeed, 168)
-local keyButton  = Button("Hakari Key: Y", 198)
+local keyButton  = Button("Hakari Key: B", 198)
 
 local toggleGui = Instance.new("TextButton")
 toggleGui.Size = UDim2.new(0, 22, 0, 22)
@@ -102,7 +102,7 @@ local showItems = false
 local showGen = false
 local jumpEnabled = false
 local hidden = false
-local hakariKey = Enum.KeyCode.Y
+local hakariKey = Enum.KeyCode.B
 local waitingForKey = false
 
 -- Infinite stamina + jump loop
@@ -155,7 +155,7 @@ local function FullBright(b)
 	if b then
 		Lighting.Ambient = Color3.new(1, 1, 1)
 		Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
-		Lighting.Brightness = 4
+		Lighting.Brightness = 6
 		Lighting.FogStart = 0
 		Lighting.FogEnd = 1000000
 	else
