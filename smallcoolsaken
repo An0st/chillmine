@@ -85,16 +85,37 @@ local keyButton  = Button("Hakari Key: B", 198)
 
 -- Title khi thu nhỏ
 local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, -30, 0, 24)
-titleLabel.Position = UDim2.new(0, 6, 0, 2)
+titleLabel.Size = UDim2.new(1, -30, 1, 0)
+titleLabel.Position = UDim2.new(0, 4, 0, 0)
 titleLabel.BackgroundTransparency = 1
 titleLabel.Text = "c00lgui"
 titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 titleLabel.Font = Enum.Font.SourceSansBold
-titleLabel.TextSize = 18
-titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.TextSize = 20
+titleLabel.TextXAlignment = Enum.TextXAlignment.Center
+titleLabel.TextYAlignment = Enum.TextYAlignment.Center
+titleLabel.TextStrokeTransparency = 0.3
+titleLabel.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
 titleLabel.Visible = false
 titleLabel.Parent = mainFrame
+
+-- Glow layer (lớp phát sáng phía sau)
+local glowLabel = Instance.new("TextLabel")
+glowLabel.Size = UDim2.new(1, -30, 1, 0)
+glowLabel.Position = UDim2.new(0, 4, 0, 0)
+glowLabel.BackgroundTransparency = 1
+glowLabel.Text = "c00lgui"
+glowLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+glowLabel.Font = Enum.Font.SourceSansBold
+glowLabel.TextSize = 22
+glowLabel.TextXAlignment = Enum.TextXAlignment.Center
+glowLabel.TextYAlignment = Enum.TextYAlignment.Center
+glowLabel.TextTransparency = 0.65
+glowLabel.TextStrokeTransparency = 0.7
+glowLabel.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
+glowLabel.ZIndex = 0
+glowLabel.Visible = false
+glowLabel.Parent = mainFrame
 
 local toggleGui = Instance.new("TextButton")
 toggleGui.Size = UDim2.new(0, 22, 0, 22)
@@ -367,6 +388,7 @@ local function ToggleGUI()
 	speedBox.Visible = not hidden
 	keyButton.Visible = not hidden
 	titleLabel.Visible = hidden
+	glowLabel.Visible = hidden
 	mainFrame.Size = hidden and UDim2.new(0, 200, 0, 28) or UDim2.new(0, 200, 0, 280)
 	toggleGui.Text = hidden and "+" or "-"
 end
