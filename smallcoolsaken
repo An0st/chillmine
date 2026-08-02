@@ -327,10 +327,11 @@ local function HandleKiller_Attribute(Killer)
 		if not _G.AutoBlockEnabled then return end
 		StartBlockDetection(Killer, queryHitbox)
 	end
-	abilityConn = Killer:GetAttributeChangedSignal("AbilityLastUsed"):Connect(function()
+	local function onAbilityLastUsed()
 		if not _G.AutoBlockEnabled then return end
 		doBlock()
-	end)
+	end
+	abilityConn = Killer:GetAttributeChangedSignal("AbilityLastUsed"):Connect(onAbilityLastUsed)
 	Killer.AncestryChanged:Connect(function()
 		if not Killer.Parent then
 			abilityConn:Disconnect()
@@ -338,7 +339,9 @@ local function HandleKiller_Attribute(Killer)
 		end
 	end)
 	table.insert(_G.AutoBlockConnections, {
-		Disconnect = function() abilityConn:Disconnect() end
+		Disconnect = function()
+			abilityConn:Disconnect()
+		end
 	})
 end
 
@@ -375,6 +378,7 @@ local function DisableAutoBlock()
 		_G.BlockHitboxData = {}
 	end
 end
+
 
 local infEnabled, espEnabled, showItems, showGen, jumpEnabled = false, false, false, false, false
 local hidden = false
