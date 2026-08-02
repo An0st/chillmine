@@ -854,7 +854,7 @@ UIS.InputBegan:Connect(function(input, gp)
 		end
 		return
 	end
-	if input.KeyCode == Enum.KeyCode.RightShift then
+	if input.KeyCode == Enum.KeyCode.K then
 		ToggleGUI()
 	elseif input.KeyCode == Enum.KeyCode.KeypadFour then
 		PrevPage()
