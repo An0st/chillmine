@@ -19,7 +19,7 @@ stamina.StaminaLossDisabled = true
 local CONFIG_FILE = "c00lgui_v23_config.json"
 
 -- ===== Flow Solve =====
-local flow = { nodeDelay = 0.04 }
+local flow = { nodeDelay = 0.02 }
 local function flowKey(n) return n.row .. "-" .. n.col end
 local function flowNeighbour(r1, c1, r2, c2)
 	if r2 == r1 - 1 and c2 == c1 then return "up" end
