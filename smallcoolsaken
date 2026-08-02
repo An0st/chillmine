@@ -2,6 +2,9 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
 local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Debris = game:GetService("Debris")
 local lp = Players.LocalPlayer
 
 local Sprinting = ReplicatedStorage.Systems.Character.Game.Sprinting
@@ -13,200 +16,769 @@ stamina.StaminaLoss = 5
 stamina.SprintSpeed = 28.6
 stamina.StaminaLossDisabled = true
 
--- GUI
-local gui = Instance.new("ScreenGui")
-gui.Name = "UtilityGui"
-gui.ResetOnSpawn = false
-gui.Parent = lp.PlayerGui
-
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 200, 0, 280)
-mainFrame.Position = UDim2.new(0, 10, 0, 10)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-mainFrame.BackgroundTransparency = 0.15
-mainFrame.BorderColor3 = Color3.fromRGB(255, 0, 0)
-mainFrame.BorderSizePixel = 2
-mainFrame.Active = true
-mainFrame.Parent = gui
-
-local function Button(text, y)
-	local b = Instance.new("TextButton")
-	b.Size = UDim2.new(0, 180, 0, 26)
-	b.Position = UDim2.new(0, 10, 0, y)
-	b.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-	b.BorderColor3 = Color3.fromRGB(255, 0, 0)
-	b.BorderSizePixel = 2
-	b.TextColor3 = Color3.new(1, 1, 1)
-	b.Font = Enum.Font.SourceSansBold
-	b.TextSize = 16
-	b.Text = text
-	b.Parent = mainFrame
-	return b
+-- ===== Flow Solve =====
+local flow = { nodeDelay = 0.04 }
+local function flowKey(n) return n.row .. "-" .. n.col end
+local function flowNeighbour(r1, c1, r2, c2)
+	if r2 == r1 - 1 and c2 == c1 then return "up" end
+	if r2 == r1 + 1 and c2 == c1 then return "down" end
+	if r2 == r1 and c2 == c1 - 1 then return "left" end
+	if r2 == r1 and c2 == c1 + 1 then return "right" end
+	return false
 end
-
-local function Label(text, y)
-	local l = Instance.new("TextLabel")
-	l.Size = UDim2.new(0, 180, 0, 16)
-	l.Position = UDim2.new(0, 10, 0, y)
-	l.BackgroundTransparency = 1
-	l.TextColor3 = Color3.new(1, 1, 1)
-	l.Font = Enum.Font.SourceSans
-	l.TextSize = 15
-	l.Text = text
-	l.Parent = mainFrame
-	return l
-end
-
-local function TextBox(default, y)
-	local t = Instance.new("TextBox")
-	t.Size = UDim2.new(0, 180, 0, 22)
-	t.Position = UDim2.new(0, 10, 0, y)
-	t.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-	t.BorderColor3 = Color3.fromRGB(255, 0, 0)
-	t.BorderSizePixel = 2
-	t.TextColor3 = Color3.new(1, 1, 1)
-	t.Font = Enum.Font.SourceSans
-	t.TextSize = 15
-	t.Text = tostring(default)
-	t.ClearTextOnFocus = false
-	t.Parent = mainFrame
-	return t
-end
-
--- Buttons
-local infButton  = Button("Inf Stamina: OFF", 8)
-local espButton  = Button("ESP: OFF", 36)
-local itemButton = Button("Item ESP: OFF", 64)
-local genButton  = Button("Gen ESP: OFF", 92)
-local jumpButton = Button("Jump: OFF", 120)
-local speedLabel = Label("Sprint Speed", 150)
-local speedBox   = TextBox(stamina.SprintSpeed, 168)
-local keyButton  = Button("Hakari Key: B", 198)
-
--- Title khi thu nhỏ
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, -30, 1, 0)
-titleLabel.Position = UDim2.new(0, 4, 0, 0)
-titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "c00lgui"
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.Font = Enum.Font.SourceSansBold
-titleLabel.TextSize = 20
-titleLabel.TextXAlignment = Enum.TextXAlignment.Center
-titleLabel.TextYAlignment = Enum.TextYAlignment.Center
-titleLabel.TextStrokeTransparency = 0.3
-titleLabel.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.Visible = false
-titleLabel.Parent = mainFrame
-
--- Glow layer (lớp phát sáng phía sau)
-local glowLabel = Instance.new("TextLabel")
-glowLabel.Size = UDim2.new(1, -30, 1, 0)
-glowLabel.Position = UDim2.new(0, 4, 0, 0)
-glowLabel.BackgroundTransparency = 1
-glowLabel.Text = "c00lgui"
-glowLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-glowLabel.Font = Enum.Font.SourceSansBold
-glowLabel.TextSize = 22
-glowLabel.TextXAlignment = Enum.TextXAlignment.Center
-glowLabel.TextYAlignment = Enum.TextYAlignment.Center
-glowLabel.TextTransparency = 0.65
-glowLabel.TextStrokeTransparency = 0.7
-glowLabel.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
-glowLabel.ZIndex = 0
-glowLabel.Visible = false
-glowLabel.Parent = mainFrame
-
-local toggleGui = Instance.new("TextButton")
-toggleGui.Size = UDim2.new(0, 22, 0, 22)
-toggleGui.Position = UDim2.new(1, 4, 0, 2)
-toggleGui.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-toggleGui.BorderColor3 = Color3.fromRGB(255, 0, 0)
-toggleGui.BorderSizePixel = 2
-toggleGui.Text = "-"
-toggleGui.TextColor3 = Color3.new(1, 1, 1)
-toggleGui.Font = Enum.Font.SourceSansBold
-toggleGui.TextSize = 18
-toggleGui.Parent = mainFrame
-
--- States
-local infEnabled = false
-local espEnabled = false
-local showItems = false
-local showGen = false
-local jumpEnabled = false
-local hidden = false
-local hakariKey = Enum.KeyCode.B
-local waitingForKey = false
-
--- Infinite stamina + jump loop
-task.spawn(function()
-	while task.wait(0.1) do
-		if infEnabled then
-			stamina.Stamina = stamina.MaxStamina
+local function flowOrder(path, endpoints)
+	if not path or #path == 0 then return path end
+	local lookup = {}
+	for _, n in ipairs(path) do lookup[flowKey(n)] = n end
+	local start
+	for _, ep in ipairs(endpoints or {}) do
+		for _, n in ipairs(path) do
+			if n.row == ep.row and n.col == ep.col then
+				start = { row = ep.row, col = ep.col }
+				break
+			end
 		end
-		if jumpEnabled then
-			local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
-			if hum then
-				hum.UseJumpPower = true
-				hum.JumpPower = 50
+		if start then break end
+	end
+	if not start then
+		for _, n in ipairs(path) do
+			local nb = 0
+			for _, d in ipairs({ { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } }) do
+				if lookup[(n.row + d[1]) .. "-" .. (n.col + d[2])] then nb = nb + 1 end
+			end
+			if nb == 1 then start = { row = n.row, col = n.col } break end
+		end
+	end
+	if not start then start = { row = path[1].row, col = path[1].col } end
+	local pool, ordered = {}, {}
+	for _, n in ipairs(path) do pool[flowKey(n)] = { row = n.row, col = n.col } end
+	local cur = start
+	table.insert(ordered, { row = cur.row, col = cur.col })
+	pool[flowKey(cur)] = nil
+	while next(pool) do
+		local moved = false
+		for k, node in pairs(pool) do
+			if flowNeighbour(cur.row, cur.col, node.row, node.col) then
+				table.insert(ordered, { row = node.row, col = node.col })
+				pool[k] = nil
+				cur = node
+				moved = true
+				break
+			end
+		end
+		if not moved then break end
+	end
+	return ordered
+end
+local function flowSolve(puzzle)
+	pcall(function()
+		if not puzzle or not puzzle.Solution then return end
+		local indices = {}
+		for i = 1, #puzzle.Solution do indices[i] = i end
+		for i = #indices, 2, -1 do
+			local j = math.random(1, i)
+			indices[i], indices[j] = indices[j], indices[i]
+		end
+		for _, ci in ipairs(indices) do
+			local solution = puzzle.Solution[ci]
+			if not solution then continue end
+			local ordered = flowOrder(solution, puzzle.targetPairs[ci])
+			if not ordered or #ordered == 0 then continue end
+			puzzle.paths[ci] = {}
+			for _, node in ipairs(ordered) do
+				table.insert(puzzle.paths[ci], { row = node.row, col = node.col })
+				puzzle:updateGui()
+				task.wait(flow.nodeDelay)
+			end
+			task.wait(0)
+			puzzle:checkForWin()
+		end
+	end)
+end
+local currentPuzzle = nil
+pcall(function()
+	local modFolder = ReplicatedStorage:FindFirstChild("Modules")
+	local miniFolder = modFolder and modFolder:FindFirstChild("Minigames")
+	local fgFolder = miniFolder and miniFolder:FindFirstChild("FlowGameManager")
+	local fgModule = fgFolder and fgFolder:FindFirstChild("FlowGame")
+	if fgModule then
+		local ok, FG = pcall(require, fgModule)
+		if ok and FG and FG.new then
+			local orig = FG.new
+			FG.new = function(...)
+				local p = orig(...)
+				currentPuzzle = p
+				return p
 			end
 		end
 	end
 end)
-
--- Speed box
-speedBox.FocusLost:Connect(function()
-	local n = tonumber(speedBox.Text)
-	if n then
-		stamina.SprintSpeed = n
+local function SolveNow()
+	if currentPuzzle then
+		flowSolve(currentPuzzle)
 	else
-		speedBox.Text = tostring(stamina.SprintSpeed)
-	end
-end)
-
--- Character added
-lp.CharacterAdded:Connect(function(char)
-	local hum = char:WaitForChild("Humanoid")
-	if jumpEnabled then
-		hum.UseJumpPower = true
-		hum.JumpPower = 50
-	end
-end)
-
--- ESP helpers
-local PlayersFolder = workspace:WaitForChild("Players")
-
-local oldLighting = {
-	Ambient = Lighting.Ambient,
-	OutdoorAmbient = Lighting.OutdoorAmbient,
-	Brightness = Lighting.Brightness,
-	FogStart = Lighting.FogStart,
-	FogEnd = Lighting.FogEnd
-}
-
-local function FullBright(b)
-	if b then
-		Lighting.Ambient = Color3.new(1, 1, 1)
-		Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
-		Lighting.Brightness = 6
-		Lighting.FogStart = 0
-		Lighting.FogEnd = 1000000
-	else
-		for k, v in pairs(oldLighting) do
-			Lighting[k] = v
+		for _, v in pairs(getgc(true)) do
+			if typeof(v) == "table" and rawget(v, "Solution") and rawget(v, "paths") and rawget(v, "updateGui") then
+				flowSolve(v)
+				break
+			end
 		end
 	end
 end
 
-local function addHL(model, color)
-	if not model or not model.Parent then return end
-	local existing = model:FindFirstChild("ESP_HL")
-	if existing then
-		existing.FillColor = color
-		existing.OutlineColor = color
+-- ===== AUTO BLOCK =====
+_G.BaseHitboxSize = Vector3.new(4.5, 6, 7.5)
+_G.HitboxScale = 1.0
+_G.HitboxOffset = -1.4
+_G.HitboxColor = Color3.fromRGB(255, 255, 255)
+_G.ShowOutline = true
+_G.OutlineThickness = 0.01
+_G.ShowHitboxVisual = true
+_G.HitboxTransparency = 0.5
+_G.HitboxDuration = 1.5
+_G.BlockDelay = 0
+_G.AutoBlockEnabled = false
+_G.AutoBlockConnections = {}
+_G.DragEnabled = false
+_G.DragHitboxScale = 1.0
+_G.DragHitboxOffset = -1.4
+_G.DragHitboxDuration = 1.5
+_G.DragHitboxColor = Color3.fromRGB(100, 255, 100)
+_G.DragHitboxTransparency = 0.5
+_G.BlockHitboxData = {}
+_G.DragHitboxData = {}
+
+local MainUI, KillersFolder, SurvivorsFolder, Hitboxes
+local function GetObjects()
+	MainUI = lp.PlayerGui:FindFirstChild("MainUI")
+	KillersFolder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Killers")
+	SurvivorsFolder = Workspace.Players and Workspace.Players:FindFirstChild("Survivors")
+	Hitboxes = Workspace:FindFirstChild("Hitboxes") or Instance.new("Folder", Workspace)
+	Hitboxes.Name = "Hitboxes"
+end
+GetObjects()
+
+local function getBlockButton()
+	if not MainUI then return nil end
+	local container = MainUI:FindFirstChild("AbilityContainer")
+	if not container then return nil end
+	return container:FindFirstChild("Block") or container:FindFirstChild("Guard")
+end
+
+local function pressBlock()
+	local btn = getBlockButton()
+	if not btn then return false end
+	local cd = btn:FindFirstChild("CooldownTime")
+	if cd and cd.Text ~= "" then return false end
+	pcall(function() btn:Activate() end)
+	for _, conn in ipairs(getconnections(btn.MouseButton1Click) or {}) do
+		pcall(function() conn:Fire() end)
+	end
+	return true
+end
+
+local function CreateBlockHitboxVisual()
+	local part = Instance.new("Part")
+	part.Name = "AttackHitboxVisual"
+	part.Size = _G.BaseHitboxSize * _G.HitboxScale
+	part.Color = _G.HitboxColor
+	part.Material = Enum.Material.ForceField
+	part.Transparency = 1 - _G.HitboxTransparency
+	part.Anchored = true
+	part.CanCollide = false
+	part.CastShadow = false
+	part.Parent = Hitboxes
+	if _G.ShowOutline then
+		local outline = Instance.new("SelectionBox")
+		outline.Adornee = part
+		outline.Color3 = _G.HitboxColor
+		outline.LineThickness = _G.OutlineThickness
+		outline.Transparency = 0.1
+		outline.Visible = _G.ShowHitboxVisual
+		outline.Parent = part
+	end
+	return part
+end
+
+local function UpdateBlockHitboxPosition(part, queryHitbox)
+	if part and queryHitbox then
+		part.CFrame = queryHitbox.CFrame * CFrame.new(0, 0, _G.HitboxOffset)
+		part.Size = _G.BaseHitboxSize * _G.HitboxScale
+		part.Color = _G.HitboxColor
+		part.Transparency = 1 - _G.HitboxTransparency
+		local outline = part:FindFirstChildOfClass("SelectionBox")
+		if outline then
+			outline.Color3 = _G.HitboxColor
+			outline.LineThickness = _G.OutlineThickness
+			outline.Visible = _G.ShowOutline and _G.ShowHitboxVisual
+		end
+	end
+end
+
+local function CreateDragHitboxVisual()
+	local part = Instance.new("Part")
+	part.Name = "DragHitboxVisual"
+	part.Size = _G.BaseHitboxSize * _G.DragHitboxScale
+	part.Color = _G.DragHitboxColor
+	part.Material = Enum.Material.ForceField
+	part.Transparency = 1 - _G.DragHitboxTransparency
+	part.Anchored = true
+	part.CanCollide = false
+	part.CastShadow = false
+	part.Parent = Hitboxes
+	if _G.ShowOutline then
+		local outline = Instance.new("SelectionBox")
+		outline.Adornee = part
+		outline.Color3 = _G.DragHitboxColor
+		outline.LineThickness = _G.OutlineThickness
+		outline.Transparency = 0.1
+		outline.Visible = _G.ShowHitboxVisual
+		outline.Parent = part
+	end
+	return part
+end
+
+local function UpdateDragHitboxPosition(part, queryHitbox)
+	if part and queryHitbox then
+		part.CFrame = queryHitbox.CFrame * CFrame.new(0, 0, _G.DragHitboxOffset)
+		part.Size = _G.BaseHitboxSize * _G.DragHitboxScale
+		part.Color = _G.DragHitboxColor
+		part.Transparency = 1 - _G.DragHitboxTransparency
+		local outline = part:FindFirstChildOfClass("SelectionBox")
+		if outline then
+			outline.Color3 = _G.DragHitboxColor
+			outline.LineThickness = _G.OutlineThickness
+			outline.Visible = _G.ShowOutline and _G.ShowHitboxVisual
+		end
+	end
+end
+
+local function ClearKillerBlockHitbox(Killer)
+	local data = _G.BlockHitboxData[Killer]
+	if data then
+		if data.visualPart then data.visualPart:Destroy() end
+		if data.visualConnection then data.visualConnection:Disconnect() end
+		if data.heartbeatConnection then data.heartbeatConnection:Disconnect() end
+		_G.BlockHitboxData[Killer] = nil
+	end
+end
+
+local function ClearKillerDragHitbox(Killer)
+	local data = _G.DragHitboxData[Killer]
+	if data then
+		if data.part then data.part:Destroy() end
+		if data.connection then data.connection:Disconnect() end
+		_G.DragHitboxData[Killer] = nil
+	end
+end
+
+local OverlapParams = OverlapParams.new()
+OverlapParams.MaxParts = 1
+OverlapParams.FilterType = Enum.RaycastFilterType.Include
+
+local function StartBlockDetection(Killer, queryHitbox)
+	ClearKillerBlockHitbox(Killer)
+	local visualPart = CreateBlockHitboxVisual()
+	UpdateBlockHitboxPosition(visualPart, queryHitbox)
+	local visualConnection = RunService.Heartbeat:Connect(function()
+		if visualPart and visualPart.Parent and queryHitbox and queryHitbox.Parent then
+			UpdateBlockHitboxPosition(visualPart, queryHitbox)
+		else
+			visualConnection:Disconnect()
+		end
+	end)
+	local data = { visualPart = visualPart, visualConnection = visualConnection, heartbeatConnection = nil }
+	_G.BlockHitboxData[Killer] = data
+	local localChar = lp.Character
+	if not localChar or not SurvivorsFolder or localChar.Parent ~= SurvivorsFolder then
+		task.delay(_G.HitboxDuration, function() ClearKillerBlockHitbox(Killer) end)
 		return
 	end
+	local localQuery = localChar:FindFirstChild("QueryHitbox")
+	if not localQuery then
+		task.delay(_G.HitboxDuration, function() ClearKillerBlockHitbox(Killer) end)
+		return
+	end
+	local hitboxSize = _G.BaseHitboxSize * _G.HitboxScale
+	local startTime = tick()
+	local instantPart = Instance.new("Part")
+	instantPart.Size = hitboxSize
+	instantPart.CanCollide = false
+	instantPart.Anchored = true
+	instantPart.Transparency = 1
+	instantPart.Parent = Hitboxes
+	local heartbeatPart = Instance.new("Part")
+	heartbeatPart.Size = hitboxSize
+	heartbeatPart.CanCollide = false
+	heartbeatPart.Anchored = true
+	heartbeatPart.Transparency = 1
+	heartbeatPart.Parent = Hitboxes
+	OverlapParams.FilterDescendantsInstances = { localQuery }
+	instantPart.CFrame = queryHitbox.CFrame * CFrame.new(0, 0, _G.HitboxOffset)
+	local instantHits = Workspace:GetPartsInPart(instantPart, OverlapParams)
+	if #instantHits > 0 then
+		pressBlock()
+		instantPart:Destroy()
+		heartbeatPart:Destroy()
+		ClearKillerBlockHitbox(Killer)
+		return
+	end
+	local heartbeatConn
+	heartbeatConn = RunService.Heartbeat:Connect(function()
+		if not _G.AutoBlockEnabled then
+			heartbeatConn:Disconnect()
+			instantPart:Destroy()
+			heartbeatPart:Destroy()
+			ClearKillerBlockHitbox(Killer)
+			return
+		end
+		if tick() - startTime > _G.HitboxDuration then
+			heartbeatConn:Disconnect()
+			instantPart:Destroy()
+			heartbeatPart:Destroy()
+			ClearKillerBlockHitbox(Killer)
+			return
+		end
+		if not localChar.Parent or not SurvivorsFolder or localChar.Parent ~= SurvivorsFolder then
+			heartbeatConn:Disconnect()
+			instantPart:Destroy()
+			heartbeatPart:Destroy()
+			ClearKillerBlockHitbox(Killer)
+			return
+		end
+		if not queryHitbox or not queryHitbox.Parent then
+			heartbeatConn:Disconnect()
+			instantPart:Destroy()
+			heartbeatPart:Destroy()
+			ClearKillerBlockHitbox(Killer)
+			return
+		end
+		heartbeatPart.CFrame = queryHitbox.CFrame * CFrame.new(0, 0, _G.HitboxOffset)
+		local hits = Workspace:GetPartsInPart(heartbeatPart, OverlapParams)
+		if #hits > 0 then
+			pressBlock()
+			heartbeatConn:Disconnect()
+			instantPart:Destroy()
+			heartbeatPart:Destroy()
+			ClearKillerBlockHitbox(Killer)
+		end
+	end)
+	data.heartbeatConnection = heartbeatConn
+end
+
+local function StartDragDetection(Killer, queryHitbox)
+	ClearKillerDragHitbox(Killer)
+	local visualPart = CreateDragHitboxVisual()
+	UpdateDragHitboxPosition(visualPart, queryHitbox)
+	local updateConnection = RunService.Heartbeat:Connect(function()
+		if visualPart and visualPart.Parent and queryHitbox and queryHitbox.Parent then
+			UpdateDragHitboxPosition(visualPart, queryHitbox)
+		else
+			updateConnection:Disconnect()
+		end
+	end)
+	_G.DragHitboxData[Killer] = { part = visualPart, connection = updateConnection }
+	task.delay(_G.DragHitboxDuration, function() ClearKillerDragHitbox(Killer) end)
+	local localChar = lp.Character
+	if not localChar or not SurvivorsFolder or localChar.Parent ~= SurvivorsFolder then return end
+	local localQuery = localChar:FindFirstChild("QueryHitbox")
+	if not localQuery then return end
+	local dragHitboxSize = _G.BaseHitboxSize * _G.DragHitboxScale
+	task.spawn(function()
+		local startTime = tick()
+		while tick() - startTime < _G.DragHitboxDuration do
+			if not _G.DragEnabled then break end
+			if not localChar.Parent or not SurvivorsFolder or localChar.Parent ~= SurvivorsFolder then break end
+			if not queryHitbox or not queryHitbox.Parent then break end
+			OverlapParams.FilterDescendantsInstances = { localQuery }
+			local part = Instance.new("Part")
+			part.Size = dragHitboxSize
+			part.CFrame = queryHitbox.CFrame * CFrame.new(0, 0, _G.DragHitboxOffset)
+			part.CanCollide = false
+			part.Anchored = true
+			part.Transparency = 1
+			part.Parent = Hitboxes
+			Debris:AddItem(part, 0.1)
+			local hits = Workspace:GetPartsInPart(part, OverlapParams)
+			if #hits > 0 then
+				local myRoot = localChar:FindFirstChild("HumanoidRootPart")
+				local targetPos = (queryHitbox.CFrame * CFrame.new(0, 0, _G.HitboxOffset)).Position
+				if myRoot then
+					local stepTime = _G.DragHitboxDuration / 20
+					for i = 1, 20 do
+						if not myRoot.Parent then break end
+						myRoot.CFrame = myRoot.CFrame:Lerp(CFrame.new(targetPos) * myRoot.CFrame.Rotation, i / 20)
+						task.wait(stepTime)
+					end
+				end
+				break
+			end
+			task.wait(0.015)
+		end
+	end)
+end
+
+local function HandleKiller_Attribute(Killer)
+	if not Players:GetPlayerFromCharacter(Killer) then return end
+	local queryHitbox = Killer:FindFirstChild("QueryHitbox")
+	if not queryHitbox then return end
+	local blockLocked = false
+	local abilityConn, abilitiessConn
+	local function doBlock()
+		if not _G.AutoBlockEnabled and not _G.DragEnabled then return end
+		if _G.AutoBlockEnabled then StartBlockDetection(Killer, queryHitbox) end
+		if _G.DragEnabled then StartDragDetection(Killer, queryHitbox) end
+	end
+	local function onAbilitiesUsed()
+		blockLocked = true
+	end
+	local function onAbilityLastUsed()
+		if not _G.AutoBlockEnabled and not _G.DragEnabled then return end
+		if blockLocked then
+			blockLocked = false
+		else
+			doBlock()
+		end
+	end
+	abilityConn = Killer:GetAttributeChangedSignal("AbilityLastUsed"):Connect(onAbilityLastUsed)
+	abilitiessConn = Killer:GetAttributeChangedSignal("AbilitiesUsed"):Connect(onAbilitiesUsed)
+	Killer.AncestryChanged:Connect(function()
+		if not Killer.Parent then
+			abilityConn:Disconnect()
+			abilitiessConn:Disconnect()
+			ClearKillerBlockHitbox(Killer)
+			ClearKillerDragHitbox(Killer)
+		end
+	end)
+	table.insert(_G.AutoBlockConnections, {
+		Disconnect = function()
+			abilityConn:Disconnect()
+			abilitiessConn:Disconnect()
+		end
+	})
+end
+
+local function EnableAutoBlock()
+	if _G.AutoBlockEnabled or _G.DragEnabled then
+		for _, con in ipairs(_G.AutoBlockConnections) do
+			pcall(con.Disconnect, con)
+		end
+		_G.AutoBlockConnections = {}
+		GetObjects()
+		if KillersFolder then
+			for _, killer in ipairs(KillersFolder:GetChildren()) do
+				HandleKiller_Attribute(killer)
+			end
+			local childCon = KillersFolder.ChildAdded:Connect(HandleKiller_Attribute)
+			table.insert(_G.AutoBlockConnections, {
+				Disconnect = function() childCon:Disconnect() end
+			})
+		end
+	end
+end
+
+local function DisableAutoBlock()
+	if not _G.AutoBlockEnabled and not _G.DragEnabled then
+		for _, con in ipairs(_G.AutoBlockConnections) do
+			pcall(con.Disconnect, con)
+		end
+		_G.AutoBlockConnections = {}
+		for killer, data in pairs(_G.BlockHitboxData) do
+			if data.visualPart then data.visualPart:Destroy() end
+			if data.visualConnection then data.visualConnection:Disconnect() end
+			if data.heartbeatConnection then data.heartbeatConnection:Disconnect() end
+		end
+		for killer, data in pairs(_G.DragHitboxData) do
+			if data.part then data.part:Destroy() end
+			if data.connection then data.connection:Disconnect() end
+		end
+		_G.BlockHitboxData = {}
+		_G.DragHitboxData = {}
+	end
+end
+
+-- ===== STATES =====
+local infEnabled, espEnabled, showItems, showGen, jumpEnabled = false, false, false, false, false
+local hidden = false
+local currentPage, totalPages = 1, 4
+local hakariKey, solveKey = Enum.KeyCode.B, Enum.KeyCode.T
+local waitingForKey, waitingForSolveKey = false, false
+local hakariActive = false
+
+-- ===== GUI =====
+local gui = Instance.new("ScreenGui")
+gui.Name = "c00lgui"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = lp.PlayerGui
+
+local RED = Color3.fromRGB(255, 0, 0)
+local BG  = Color3.fromRGB(0, 0, 0)
+local TXT = Color3.fromRGB(255, 255, 255)
+
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = UDim2.new(0, 260, 0, 280)
+main.Position = UDim2.new(0, 20, 0.3, 0)
+main.BackgroundColor3 = BG
+main.BorderColor3 = RED
+main.BorderSizePixel = 2
+main.Active = true
+main.Parent = gui
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 28)
+title.BackgroundColor3 = BG
+title.BorderColor3 = RED
+title.BorderSizePixel = 2
+title.Text = "c00lgui v2.3"
+title.TextColor3 = TXT
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 18
+title.Parent = main
+
+local leftBtn = Instance.new("TextButton")
+leftBtn.Size = UDim2.new(0.5, -1, 0, 28)
+leftBtn.Position = UDim2.new(0, 0, 0, 28)
+leftBtn.BackgroundColor3 = BG
+leftBtn.BorderColor3 = RED
+leftBtn.BorderSizePixel = 2
+leftBtn.Text = "<"
+leftBtn.TextColor3 = TXT
+leftBtn.Font = Enum.Font.SourceSansBold
+leftBtn.TextSize = 20
+leftBtn.Parent = main
+
+local rightBtn = Instance.new("TextButton")
+rightBtn.Size = UDim2.new(0.5, -1, 0, 28)
+rightBtn.Position = UDim2.new(0.5, 1, 0, 28)
+rightBtn.BackgroundColor3 = BG
+rightBtn.BorderColor3 = RED
+rightBtn.BorderSizePixel = 2
+rightBtn.Text = ">"
+rightBtn.TextColor3 = TXT
+rightBtn.Font = Enum.Font.SourceSansBold
+rightBtn.TextSize = 20
+rightBtn.Parent = main
+
+local content = Instance.new("Frame")
+content.Size = UDim2.new(1, 0, 0, 168)
+content.Position = UDim2.new(0, 0, 0, 56)
+content.BackgroundColor3 = BG
+content.BorderColor3 = RED
+content.BorderSizePixel = 2
+content.Parent = main
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(1, 0, 0, 28)
+closeBtn.Position = UDim2.new(0, 0, 1, -28)
+closeBtn.BackgroundColor3 = BG
+closeBtn.BorderColor3 = RED
+closeBtn.BorderSizePixel = 2
+closeBtn.Text = "Close"
+closeBtn.TextColor3 = TXT
+closeBtn.Font = Enum.Font.SourceSansBold
+closeBtn.TextSize = 16
+closeBtn.Parent = main
+
+local function Btn(parent, text, y)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(1, -16, 0, 26)
+	b.Position = UDim2.new(0, 8, 0, y)
+	b.BackgroundColor3 = BG
+	b.BorderColor3 = RED
+	b.BorderSizePixel = 2
+	b.Text = text
+	b.TextColor3 = TXT
+	b.Font = Enum.Font.SourceSansBold
+	b.TextSize = 14
+	b.Parent = parent
+	return b
+end
+
+local function Lbl(parent, text, y)
+	local l = Instance.new("TextLabel")
+	l.Size = UDim2.new(1, -16, 0, 16)
+	l.Position = UDim2.new(0, 8, 0, y)
+	l.BackgroundTransparency = 1
+	l.Text = text
+	l.TextColor3 = TXT
+	l.Font = Enum.Font.SourceSans
+	l.TextSize = 13
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.Parent = parent
+	return l
+end
+
+local function Box(parent, default, y)
+	local t = Instance.new("TextBox")
+	t.Size = UDim2.new(1, -16, 0, 24)
+	t.Position = UDim2.new(0, 8, 0, y)
+	t.BackgroundColor3 = BG
+	t.BorderColor3 = RED
+	t.BorderSizePixel = 2
+	t.Text = tostring(default)
+	t.TextColor3 = TXT
+	t.Font = Enum.Font.SourceSans
+	t.TextSize = 14
+	t.ClearTextOnFocus = false
+	t.Parent = parent
+	return t
+end
+
+-- PAGE 1: STAMINA
+local page1 = Instance.new("Frame")
+page1.Size = UDim2.new(1, 0, 1, 0)
+page1.BackgroundTransparency = 1
+page1.Visible = true
+page1.Parent = content
+Lbl(page1, "STAMINA", 6)
+local speedBox = Box(page1, stamina.SprintSpeed, 28)
+local infButton = Btn(page1, "Inf Stamina: OFF", 60)
+local jumpButton = Btn(page1, "Jump: OFF", 94)
+
+-- PAGE 2: ESP
+local page2 = Instance.new("Frame")
+page2.Size = UDim2.new(1, 0, 1, 0)
+page2.BackgroundTransparency = 1
+page2.Visible = false
+page2.Parent = content
+Lbl(page2, "ESP", 6)
+local espButton  = Btn(page2, "ESP: OFF", 28)
+local itemButton = Btn(page2, "Item ESP: OFF", 62)
+local genButton  = Btn(page2, "Gen ESP: OFF", 96)
+
+-- PAGE 3: MISC
+local page3 = Instance.new("Frame")
+page3.Size = UDim2.new(1, 0, 1, 0)
+page3.BackgroundTransparency = 1
+page3.Visible = false
+page3.Parent = content
+Lbl(page3, "MISC", 6)
+local keyButton   = Btn(page3, "Hakari Key: B", 28)
+local solveButton = Btn(page3, "SOLVE", 62)
+local solveKeyBtn = Btn(page3, "Solve Key: T", 96)
+
+-- PAGE 4: BLOCK
+local page4 = Instance.new("Frame")
+page4.Size = UDim2.new(1, 0, 1, 0)
+page4.BackgroundTransparency = 1
+page4.Visible = false
+page4.Parent = content
+Lbl(page4, "BLOCK", 6)
+local autoBlockBtn = Btn(page4, "Auto Block: OFF", 28)
+local dragBtn      = Btn(page4, "Drag: OFF", 62)
+local showHitboxBtn = Btn(page4, "Show Hitbox: ON", 96)
+
+local pages = { page1, page2, page3, page4 }
+
+local function UpdatePage()
+	for i, p in ipairs(pages) do
+		p.Visible = (i == currentPage)
+	end
+end
+
+local function PrevPage()
+	currentPage = currentPage - 1
+	if currentPage < 1 then currentPage = totalPages end
+	UpdatePage()
+end
+
+local function NextPage()
+	currentPage = currentPage + 1
+	if currentPage > totalPages then currentPage = 1 end
+	UpdatePage()
+end
+
+leftBtn.MouseButton1Click:Connect(PrevPage)
+rightBtn.MouseButton1Click:Connect(NextPage)
+
+-- Collapsed
+local mini = Instance.new("Frame")
+mini.Size = UDim2.new(0, 160, 0, 28)
+mini.Position = main.Position
+mini.BackgroundColor3 = BG
+mini.BorderColor3 = RED
+mini.BorderSizePixel = 2
+mini.Visible = false
+mini.Active = true
+mini.Parent = gui
+
+local miniTitle = Instance.new("TextLabel")
+miniTitle.Size = UDim2.new(1, -30, 1, 0)
+miniTitle.Position = UDim2.new(0, 6, 0, 0)
+miniTitle.BackgroundTransparency = 1
+miniTitle.Text = "c00lgui v2.3"
+miniTitle.TextColor3 = TXT
+miniTitle.Font = Enum.Font.SourceSansBold
+miniTitle.TextSize = 14
+miniTitle.TextXAlignment = Enum.TextXAlignment.Left
+miniTitle.Parent = mini
+
+local miniOpen = Instance.new("TextButton")
+miniOpen.Size = UDim2.new(0, 26, 1, 0)
+miniOpen.Position = UDim2.new(1, -26, 0, 0)
+miniOpen.BackgroundColor3 = BG
+miniOpen.BorderColor3 = RED
+miniOpen.BorderSizePixel = 2
+miniOpen.Text = "+"
+miniOpen.TextColor3 = TXT
+miniOpen.Font = Enum.Font.SourceSansBold
+miniOpen.TextSize = 16
+miniOpen.Parent = mini
+
+local function ToggleGUI()
+	hidden = not hidden
+	main.Visible = not hidden
+	mini.Visible = hidden
+	if hidden then mini.Position = main.Position else main.Position = mini.Position end
+end
+
+closeBtn.MouseButton1Click:Connect(ToggleGUI)
+miniOpen.MouseButton1Click:Connect(ToggleGUI)
+
+-- ===== LOGIC =====
+task.spawn(function()
+	while task.wait(0.1) do
+		if infEnabled then stamina.Stamina = stamina.MaxStamina end
+		if jumpEnabled then
+			local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+			if hum then hum.UseJumpPower = true hum.JumpPower = 50 end
+		end
+	end
+end)
+
+speedBox.FocusLost:Connect(function()
+	local n = tonumber(speedBox.Text)
+	if n then stamina.SprintSpeed = n else speedBox.Text = tostring(stamina.SprintSpeed) end
+end)
+
+lp.CharacterAdded:Connect(function(char)
+	local hum = char:WaitForChild("Humanoid")
+	if jumpEnabled then hum.UseJumpPower = true hum.JumpPower = 50 end
+end)
+
+-- ESP
+local PlayersFolder = workspace:WaitForChild("Players")
+local oldLighting = {
+	Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient,
+	Brightness = Lighting.Brightness, FogStart = Lighting.FogStart, FogEnd = Lighting.FogEnd
+}
+local function FullBright(b)
+	if b then
+		Lighting.Ambient = Color3.new(1,1,1)
+		Lighting.OutdoorAmbient = Color3.new(1,1,1)
+		Lighting.Brightness = 6
+		Lighting.FogStart = 0
+		Lighting.FogEnd = 1000000
+	else
+		for k,v in pairs(oldLighting) do Lighting[k] = v end
+	end
+end
+local function addHL(model, color)
+	if not model or not model.Parent then return end
+	local ex = model:FindFirstChild("ESP_HL")
+	if ex then ex.FillColor = color ex.OutlineColor = color return end
 	local h = Instance.new("Highlight")
 	h.Name = "ESP_HL"
 	h.FillTransparency = 0.85
@@ -216,280 +788,235 @@ local function addHL(model, color)
 	h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	h.Parent = model
 end
-
 local function removeHL(model)
 	local h = model and model:FindFirstChild("ESP_HL")
-	if h then
-		h:Destroy()
-	end
+	if h then h:Destroy() end
 end
-
 local function ClearAllESP()
 	for _, v in ipairs(workspace:GetDescendants()) do
-		if v:IsA("Highlight") and v.Name == "ESP_HL" then
-			v:Destroy()
-		end
+		if v:IsA("Highlight") and v.Name == "ESP_HL" then v:Destroy() end
 	end
 end
 
--- Main ESP loop (không chớp)
 task.spawn(function()
 	while task.wait(0.8) do
-		-- Players
 		if espEnabled then
 			if PlayersFolder:FindFirstChild("Killers") then
 				for _, v in ipairs(PlayersFolder.Killers:GetChildren()) do
-					if v:FindFirstChild("Humanoid") then
-						addHL(v, Color3.fromRGB(255, 0, 0))
-					end
+					if v:FindFirstChild("Humanoid") then addHL(v, Color3.fromRGB(255,0,0)) end
 				end
 			end
 			if PlayersFolder:FindFirstChild("Survivors") then
 				for _, v in ipairs(PlayersFolder.Survivors:GetChildren()) do
-					if v:FindFirstChild("Humanoid") then
-						addHL(v, Color3.fromRGB(0, 255, 0))
-					end
+					if v:FindFirstChild("Humanoid") then addHL(v, Color3.fromRGB(0,255,0)) end
 				end
 			end
 		else
 			if PlayersFolder:FindFirstChild("Killers") then
-				for _, v in ipairs(PlayersFolder.Killers:GetChildren()) do
-					removeHL(v)
-				end
+				for _, v in ipairs(PlayersFolder.Killers:GetChildren()) do removeHL(v) end
 			end
 			if PlayersFolder:FindFirstChild("Survivors") then
-				for _, v in ipairs(PlayersFolder.Survivors:GetChildren()) do
-					removeHL(v)
-				end
+				for _, v in ipairs(PlayersFolder.Survivors:GetChildren()) do removeHL(v) end
 			end
 		end
-
-		-- Items
 		if showItems then
 			for _, i in ipairs(workspace:GetDescendants()) do
-				if i.Name == "Medkit" or i.Name == "BloxyCola" then
-					addHL(i, Color3.fromRGB(180, 0, 255))
-				end
+				if i.Name == "Medkit" or i.Name == "BloxyCola" then addHL(i, Color3.fromRGB(180,0,255)) end
 			end
 		else
 			for _, i in ipairs(workspace:GetDescendants()) do
-				if i.Name == "Medkit" or i.Name == "BloxyCola" then
-					removeHL(i)
-				end
+				if i.Name == "Medkit" or i.Name == "BloxyCola" then removeHL(i) end
 			end
 		end
-
-		-- Generators
 		if showGen then
 			for _, g in ipairs(workspace:GetDescendants()) do
-				if g.Name:lower():find("generator") then
-					addHL(g, Color3.fromRGB(255, 255, 0))
-				end
+				if g.Name:lower():find("generator") then addHL(g, Color3.fromRGB(255,255,0)) end
 			end
 		else
 			for _, g in ipairs(workspace:GetDescendants()) do
-				if g.Name:lower():find("generator") then
-					removeHL(g)
-				end
+				if g.Name:lower():find("generator") then removeHL(g) end
 			end
 		end
 	end
 end)
 
--- Hakari Dance
-local hakariActive = false
+-- Hakari
 local function ToggleHakariDance(state)
 	local char = lp.Character
 	if not char then return end
 	local humanoid = char:FindFirstChildOfClass("Humanoid")
 	local rootPart = char:FindFirstChild("HumanoidRootPart")
 	if not humanoid or not rootPart then return end
-
 	if state then
 		hakariActive = true
 		humanoid.PlatformStand = true
 		humanoid.JumpPower = 0
-
-		local bodyVelocity = Instance.new("BodyVelocity")
-		bodyVelocity.Name = "HakariBV"
-		bodyVelocity.MaxForce = Vector3.new(100000, 100000, 100000)
-		bodyVelocity.Velocity = Vector3.zero
-		bodyVelocity.Parent = rootPart
-
-		local animation = Instance.new("Animation")
-		animation.AnimationId = "rbxassetid://138019937280193"
-		local animationTrack = humanoid:LoadAnimation(animation)
-		animationTrack:Play()
-
+		local bv = Instance.new("BodyVelocity")
+		bv.Name = "HakariBV"
+		bv.MaxForce = Vector3.new(1e5,1e5,1e5)
+		bv.Velocity = Vector3.zero
+		bv.Parent = rootPart
+		local anim = Instance.new("Animation")
+		anim.AnimationId = "rbxassetid://138019937280193"
+		local track = humanoid:LoadAnimation(anim)
+		track:Play()
 		local sound = Instance.new("Sound")
 		sound.Name = "HakariSound"
 		sound.SoundId = "rbxassetid://87166578676888"
-		sound.Parent = rootPart
 		sound.Volume = 0.5
 		sound.Looped = true
+		sound.Parent = rootPart
 		sound:Play()
-
 		pcall(function()
 			local effect = ReplicatedStorage.Assets.Emotes.HakariDance.HakariBeamEffect:Clone()
 			effect.Name = "PlayerEmoteVFX"
-			effect.CFrame = char.PrimaryPart.CFrame * CFrame.new(0, -1, -0.3)
+			effect.CFrame = char.PrimaryPart.CFrame * CFrame.new(0,-1,-0.3)
 			effect.WeldConstraint.Part0 = char.PrimaryPart
 			effect.WeldConstraint.Part1 = effect
 			effect.Parent = char
 			effect.CanCollide = false
 		end)
-
 		pcall(function()
-			local args = {"PlayEmote", "Animations", "HakariDance"}
-			ReplicatedStorage.Modules.Network.RemoteEvent:FireServer(unpack(args))
+			ReplicatedStorage.Modules.Network.RemoteEvent:FireServer("PlayEmote", "Animations", "HakariDance")
 		end)
-
-		animationTrack.Stopped:Connect(function()
+		track.Stopped:Connect(function()
 			if not hakariActive then
 				humanoid.PlatformStand = false
-				local bv = rootPart:FindFirstChild("HakariBV")
-				if bv then bv:Destroy() end
+				local b = rootPart:FindFirstChild("HakariBV")
+				if b then b:Destroy() end
 			end
 		end)
 	else
 		hakariActive = false
 		humanoid.PlatformStand = false
 		humanoid.JumpPower = 50
-
-		local bv = rootPart:FindFirstChild("HakariBV")
-		if bv then bv:Destroy() end
-
-		local sound = rootPart:FindFirstChild("HakariSound")
-		if sound then
-			sound:Stop()
-			sound:Destroy()
-		end
-
-		local effect = char:FindFirstChild("PlayerEmoteVFX")
-		if effect then effect:Destroy() end
-
-		for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
-			if track.Animation.AnimationId == "rbxassetid://138019937280193" then
-				track:Stop()
-			end
+		local b = rootPart:FindFirstChild("HakariBV")
+		if b then b:Destroy() end
+		local s = rootPart:FindFirstChild("HakariSound")
+		if s then s:Stop() s:Destroy() end
+		local e = char:FindFirstChild("PlayerEmoteVFX")
+		if e then e:Destroy() end
+		for _, t in ipairs(humanoid:GetPlayingAnimationTracks()) do
+			if t.Animation.AnimationId == "rbxassetid://138019937280193" then t:Stop() end
 		end
 	end
 end
 
--- Toggle GUI
-local function ToggleGUI()
-	hidden = not hidden
-	infButton.Visible = not hidden
-	espButton.Visible = not hidden
-	itemButton.Visible = not hidden
-	genButton.Visible = not hidden
-	jumpButton.Visible = not hidden
-	speedLabel.Visible = not hidden
-	speedBox.Visible = not hidden
-	keyButton.Visible = not hidden
-	titleLabel.Visible = hidden
-	glowLabel.Visible = hidden
-	mainFrame.Size = hidden and UDim2.new(0, 200, 0, 28) or UDim2.new(0, 200, 0, 280)
-	toggleGui.Text = hidden and "+" or "-"
-end
-
-toggleGui.MouseButton1Click:Connect(ToggleGUI)
-
 -- Input
 UIS.InputBegan:Connect(function(input, gp)
 	if gp then return end
-
 	if waitingForKey then
 		if input.UserInputType == Enum.UserInputType.Keyboard then
 			hakariKey = input.KeyCode
 			keyButton.Text = "Hakari Key: " .. input.KeyCode.Name
 			waitingForKey = false
-			keyButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 		end
 		return
 	end
-
+	if waitingForSolveKey then
+		if input.UserInputType == Enum.UserInputType.Keyboard then
+			solveKey = input.KeyCode
+			solveKeyBtn.Text = "Solve Key: " .. input.KeyCode.Name
+			waitingForSolveKey = false
+		end
+		return
+	end
 	if input.KeyCode == Enum.KeyCode.RightShift then
 		ToggleGUI()
+	elseif input.KeyCode == Enum.KeyCode.Comma then
+		PrevPage()
+	elseif input.KeyCode == Enum.KeyCode.Period then
+		NextPage()
 	elseif input.KeyCode == hakariKey then
 		ToggleHakariDance(not hakariActive)
+	elseif input.KeyCode == solveKey then
+		SolveNow()
 	end
 end)
 
 -- Drag
-local dragging = false
-local dragStart
-local startPos
+local function MakeDrag(frame)
+	local drag, start, pos
+	frame.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			drag = true
+			start = i.Position
+			pos = frame.Position
+			i.Changed:Connect(function()
+				if i.UserInputState == Enum.UserInputState.End then drag = false end
+			end)
+		end
+	end)
+	UIS.InputChanged:Connect(function(i)
+		if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+			local d = i.Position - start
+			frame.Position = UDim2.new(pos.X.Scale, pos.X.Offset + d.X, pos.Y.Scale, pos.Y.Offset + d.Y)
+		end
+	end)
+end
+MakeDrag(main)
+MakeDrag(mini)
 
-mainFrame.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = true
-		dragStart = input.Position
-		startPos = mainFrame.Position
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-			end
-		end)
-	end
-end)
-
-UIS.InputChanged:Connect(function(input)
-	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-		local delta = input.Position - dragStart
-		mainFrame.Position = UDim2.new(
-			startPos.X.Scale,
-			startPos.X.Offset + delta.X,
-			startPos.Y.Scale,
-			startPos.Y.Offset + delta.Y
-		)
-	end
-end)
-
--- Button callbacks
+-- Callbacks
 infButton.MouseButton1Click:Connect(function()
 	infEnabled = not infEnabled
 	stamina.StaminaLossDisabled = infEnabled
 	infButton.Text = "Inf Stamina: " .. (infEnabled and "ON" or "OFF")
 end)
-
-espButton.MouseButton1Click:Connect(function()
-	espEnabled = not espEnabled
-	espButton.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
-	FullBright(espEnabled)
-	if not espEnabled and not showItems and not showGen then
-		ClearAllESP()
-	end
-end)
-
-itemButton.MouseButton1Click:Connect(function()
-	showItems = not showItems
-	itemButton.Text = "Item ESP: " .. (showItems and "ON" or "OFF")
-	if not espEnabled and not showItems and not showGen then
-		ClearAllESP()
-	end
-end)
-
-genButton.MouseButton1Click:Connect(function()
-	showGen = not showGen
-	genButton.Text = "Gen ESP: " .. (showGen and "ON" or "OFF")
-	if not espEnabled and not showItems and not showGen then
-		ClearAllESP()
-	end
-end)
-
 jumpButton.MouseButton1Click:Connect(function()
 	jumpEnabled = not jumpEnabled
 	jumpButton.Text = "Jump: " .. (jumpEnabled and "ON" or "OFF")
 	local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
-	if hum then
-		hum.UseJumpPower = true
-		hum.JumpPower = jumpEnabled and 50 or 0
-	end
+	if hum then hum.UseJumpPower = true hum.JumpPower = jumpEnabled and 50 or 0 end
 end)
-
+espButton.MouseButton1Click:Connect(function()
+	espEnabled = not espEnabled
+	espButton.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
+	FullBright(espEnabled)
+	if not espEnabled and not showItems and not showGen then ClearAllESP() end
+end)
+itemButton.MouseButton1Click:Connect(function()
+	showItems = not showItems
+	itemButton.Text = "Item ESP: " .. (showItems and "ON" or "OFF")
+	if not espEnabled and not showItems and not showGen then ClearAllESP() end
+end)
+genButton.MouseButton1Click:Connect(function()
+	showGen = not showGen
+	genButton.Text = "Gen ESP: " .. (showGen and "ON" or "OFF")
+	if not espEnabled and not showItems and not showGen then ClearAllESP() end
+end)
 keyButton.MouseButton1Click:Connect(function()
 	waitingForKey = true
 	keyButton.Text = "Press any key..."
-	keyButton.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
+end)
+solveButton.MouseButton1Click:Connect(SolveNow)
+solveKeyBtn.MouseButton1Click:Connect(function()
+	waitingForSolveKey = true
+	solveKeyBtn.Text = "Press any key..."
+end)
+
+-- Block page callbacks
+autoBlockBtn.MouseButton1Click:Connect(function()
+	_G.AutoBlockEnabled = not _G.AutoBlockEnabled
+	autoBlockBtn.Text = "Auto Block: " .. (_G.AutoBlockEnabled and "ON" or "OFF")
+	if _G.AutoBlockEnabled or _G.DragEnabled then
+		EnableAutoBlock()
+	else
+		DisableAutoBlock()
+	end
+end)
+
+dragBtn.MouseButton1Click:Connect(function()
+	_G.DragEnabled = not _G.DragEnabled
+	dragBtn.Text = "Drag: " .. (_G.DragEnabled and "ON" or "OFF")
+	if _G.AutoBlockEnabled or _G.DragEnabled then
+		EnableAutoBlock()
+	else
+		DisableAutoBlock()
+	end
+end)
+
+showHitboxBtn.MouseButton1Click:Connect(function()
+	_G.ShowHitboxVisual = not _G.ShowHitboxVisual
+	showHitboxBtn.Text = "Show Hitbox: " .. (_G.ShowHitboxVisual and "ON" or "OFF")
 end)
