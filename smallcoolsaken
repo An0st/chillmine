@@ -5,7 +5,6 @@ local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
 local lp = Players.LocalPlayer
 
 local Sprinting = ReplicatedStorage.Systems.Character.Game.Sprinting
@@ -17,8 +16,7 @@ stamina.StaminaLoss = 5
 stamina.SprintSpeed = 28.6
 stamina.StaminaLossDisabled = true
 
-local CONFIG_FILE = "c00lgui_v23_config.json"
-
+-- ===== Flow Solve =====
 local flow = { nodeDelay = 0.04 }
 local function flowKey(n) return n.row .. "-" .. n.col end
 local function flowNeighbour(r1, c1, r2, c2)
@@ -128,6 +126,7 @@ local function SolveNow()
 	end
 end
 
+-- ===== AUTO BLOCK =====
 _G.BaseHitboxSize = Vector3.new(4.5, 6, 7.5)
 _G.HitboxScale = 0.9
 _G.HitboxOffset = -1.8
@@ -379,7 +378,7 @@ local function DisableAutoBlock()
 	end
 end
 
-
+-- ===== STATES =====
 local infEnabled, espEnabled, showItems, showGen, jumpEnabled = false, false, false, false, false
 local hidden = false
 local currentPage, totalPages = 1, 4
@@ -387,49 +386,7 @@ local hakariKey, solveKey = Enum.KeyCode.B, Enum.KeyCode.T
 local waitingForKey, waitingForSolveKey = false, false
 local hakariActive = false
 
-local function SaveConfig()
-	pcall(function()
-		local data = {
-			infEnabled = infEnabled,
-			espEnabled = espEnabled,
-			showItems = showItems,
-			showGen = showGen,
-			jumpEnabled = jumpEnabled,
-			sprintSpeed = stamina.SprintSpeed,
-			hakariKey = hakariKey.Name,
-			solveKey = solveKey.Name,
-			autoBlock = _G.AutoBlockEnabled,
-			showHitbox = _G.ShowHitboxVisual,
-			hitboxScale = _G.HitboxScale,
-			hitboxOffset = _G.HitboxOffset,
-			hitboxDuration = _G.HitboxDuration,
-		}
-		writefile(CONFIG_FILE, HttpService:JSONEncode(data))
-	end)
-end
-
-local function LoadConfig()
-	pcall(function()
-		if not isfile(CONFIG_FILE) then return end
-		local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
-		if data.infEnabled ~= nil then infEnabled = data.infEnabled end
-		if data.espEnabled ~= nil then espEnabled = data.espEnabled end
-		if data.showItems ~= nil then showItems = data.showItems end
-		if data.showGen ~= nil then showGen = data.showGen end
-		if data.jumpEnabled ~= nil then jumpEnabled = data.jumpEnabled end
-		if data.sprintSpeed then stamina.SprintSpeed = data.sprintSpeed end
-		if data.hakariKey then pcall(function() hakariKey = Enum.KeyCode[data.hakariKey] end) end
-		if data.solveKey then pcall(function() solveKey = Enum.KeyCode[data.solveKey] end) end
-		if data.autoBlock ~= nil then _G.AutoBlockEnabled = data.autoBlock end
-		if data.showHitbox ~= nil then _G.ShowHitboxVisual = data.showHitbox end
-		if data.hitboxScale then _G.HitboxScale = data.hitboxScale end
-		if data.hitboxOffset then _G.HitboxOffset = data.hitboxOffset end
-		if data.hitboxDuration then _G.HitboxDuration = data.hitboxDuration end
-	end)
-end
-
-LoadConfig()
-
+-- ===== GUI =====
 local gui = Instance.new("ScreenGui")
 gui.Name = "c00lgui"
 gui.ResetOnSpawn = false
@@ -437,7 +394,7 @@ gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = lp.PlayerGui
 
 local RED = Color3.fromRGB(255, 0, 0)
-local BG = Color3.fromRGB(0, 0, 0)
+local BG  = Color3.fromRGB(0, 0, 0)
 local TXT = Color3.fromRGB(255, 255, 255)
 
 local main = Instance.new("Frame")
@@ -565,6 +522,7 @@ local function Box(parent, default, y)
 	return t
 end
 
+-- PAGE 1: STAMINA
 local page1 = Instance.new("Frame")
 page1.Size = UDim2.new(1, 0, 1, 0)
 page1.BackgroundTransparency = 1
@@ -572,46 +530,50 @@ page1.Visible = true
 page1.Parent = content
 Lbl(page1, "STAMINA", 6)
 local speedBox = Box(page1, stamina.SprintSpeed, 28)
-local infButton = Btn(page1, "Inf Stamina: " .. (infEnabled and "ON" or "OFF"), 60)
-local jumpButton = Btn(page1, "Jump: " .. (jumpEnabled and "ON" or "OFF"), 94)
+local infButton = Btn(page1, "Inf Stamina: OFF", 60)
+local jumpButton = Btn(page1, "Jump: OFF", 94)
 
+-- PAGE 2: ESP
 local page2 = Instance.new("Frame")
 page2.Size = UDim2.new(1, 0, 1, 0)
 page2.BackgroundTransparency = 1
 page2.Visible = false
 page2.Parent = content
 Lbl(page2, "ESP", 6)
-local espButton = Btn(page2, "ESP: " .. (espEnabled and "ON" or "OFF"), 28)
-local itemButton = Btn(page2, "Item ESP: " .. (showItems and "ON" or "OFF"), 62)
-local genButton = Btn(page2, "Gen ESP: " .. (showGen and "ON" or "OFF"), 96)
+local espButton  = Btn(page2, "ESP: OFF", 28)
+local itemButton = Btn(page2, "Item ESP: OFF", 62)
+local genButton  = Btn(page2, "Gen ESP: OFF", 96)
 
+-- PAGE 3: MISC
 local page3 = Instance.new("Frame")
 page3.Size = UDim2.new(1, 0, 1, 0)
 page3.BackgroundTransparency = 1
 page3.Visible = false
 page3.Parent = content
 Lbl(page3, "MISC", 6)
-local keyButton = Btn(page3, "Hakari Key: " .. hakariKey.Name, 28)
+local keyButton   = Btn(page3, "Hakari Key: B", 28)
 local solveButton = Btn(page3, "SOLVE", 62)
-local solveKeyBtn = Btn(page3, "Solve Key: " .. solveKey.Name, 96)
+local solveKeyBtn = Btn(page3, "Solve Key: T", 96)
 
+-- PAGE 4: BLOCK
 local page4 = Instance.new("Frame")
 page4.Size = UDim2.new(1, 0, 1, 0)
 page4.BackgroundTransparency = 1
 page4.Visible = false
 page4.Parent = content
 Lbl(page4, "BLOCK", 2)
-local autoBlockBtn = Btn(page4, "Auto Block: " .. (_G.AutoBlockEnabled and "ON" or "OFF"), 18)
-local showHitboxBtn = Btn(page4, "Show Hitbox: " .. (_G.ShowHitboxVisual and "ON" or "OFF"), 46)
+local autoBlockBtn  = Btn(page4, "Auto Block: OFF", 18)
+local showHitboxBtn = Btn(page4, "Show Hitbox: ON", 46)
 Lbl(page4, "Scale / Offset Z / Duration", 74)
-local scaleBox = Box(page4, _G.HitboxScale, 90)
-local offsetBox = Box(page4, _G.HitboxOffset, 116)
+local scaleBox    = Box(page4, _G.HitboxScale, 90)
+local offsetBox   = Box(page4, _G.HitboxOffset, 116)
 local durationBox = Box(page4, _G.HitboxDuration, 142)
 
 local pages = { page1, page2, page3, page4 }
 
+-- Fade-in animation
 task.delay(0.05, function()
-	local info = TweenInfo.new(0.75, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local info = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	TweenService:Create(main, info, { BackgroundTransparency = 0 }):Play()
 	TweenService:Create(title, info, { BackgroundTransparency = 0, TextTransparency = 0 }):Play()
 	TweenService:Create(leftBtn, info, { BackgroundTransparency = 0, TextTransparency = 0 }):Play()
@@ -650,6 +612,7 @@ end
 leftBtn.MouseButton1Click:Connect(PrevPage)
 rightBtn.MouseButton1Click:Connect(NextPage)
 
+-- Collapsed
 local mini = Instance.new("Frame")
 mini.Size = UDim2.new(0, 160, 0, 28)
 mini.Position = main.Position
@@ -687,54 +650,13 @@ local function ToggleGUI()
 	hidden = not hidden
 	main.Visible = not hidden
 	mini.Visible = hidden
-	if hidden then
-		mini.Position = main.Position
-	else
-		main.Position = mini.Position
-		main.BackgroundTransparency = 1
-		title.BackgroundTransparency = 1
-		title.TextTransparency = 1
-		leftBtn.BackgroundTransparency = 1
-		leftBtn.TextTransparency = 1
-		rightBtn.BackgroundTransparency = 1
-		rightBtn.TextTransparency = 1
-		content.BackgroundTransparency = 1
-		closeBtn.BackgroundTransparency = 1
-		closeBtn.TextTransparency = 1
-		for _, page in ipairs(pages) do
-			for _, child in ipairs(page:GetDescendants()) do
-				if child:IsA("TextLabel") then
-					child.TextTransparency = 1
-				elseif child:IsA("TextButton") or child:IsA("TextBox") then
-					child.BackgroundTransparency = 1
-					child.TextTransparency = 1
-				end
-			end
-		end
-		task.delay(0.03, function()
-			local info = TweenInfo.new(0.75, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-			TweenService:Create(main, info, { BackgroundTransparency = 0 }):Play()
-			TweenService:Create(title, info, { BackgroundTransparency = 0, TextTransparency = 0 }):Play()
-			TweenService:Create(leftBtn, info, { BackgroundTransparency = 0, TextTransparency = 0 }):Play()
-			TweenService:Create(rightBtn, info, { BackgroundTransparency = 0, TextTransparency = 0 }):Play()
-			TweenService:Create(content, info, { BackgroundTransparency = 0 }):Play()
-			TweenService:Create(closeBtn, info, { BackgroundTransparency = 0, TextTransparency = 0 }):Play()
-			for _, page in ipairs(pages) do
-				for _, child in ipairs(page:GetDescendants()) do
-					if child:IsA("TextLabel") then
-						TweenService:Create(child, info, { TextTransparency = 0 }):Play()
-					elseif child:IsA("TextButton") or child:IsA("TextBox") then
-						TweenService:Create(child, info, { BackgroundTransparency = 0, TextTransparency = 0 }):Play()
-					end
-				end
-			end
-		end)
-	end
+	if hidden then mini.Position = main.Position else main.Position = mini.Position end
 end
 
 closeBtn.MouseButton1Click:Connect(ToggleGUI)
 miniOpen.MouseButton1Click:Connect(ToggleGUI)
 
+-- ===== LOGIC =====
 task.spawn(function()
 	while task.wait(0.1) do
 		if infEnabled then stamina.Stamina = stamina.MaxStamina end
@@ -747,113 +669,15 @@ end)
 
 speedBox.FocusLost:Connect(function()
 	local n = tonumber(speedBox.Text)
-	if n then stamina.SprintSpeed = n SaveConfig() else speedBox.Text = tostring(stamina.SprintSpeed) end
+	if n then stamina.SprintSpeed = n else speedBox.Text = tostring(stamina.SprintSpeed) end
 end)
-
-local function RehookAll()
-	if jumpEnabled then
-		local char = lp.Character
-		if char then
-			local hum = char:FindFirstChildOfClass("Humanoid")
-			if hum then hum.UseJumpPower = true hum.JumpPower = 50 end
-		end
-	end
-	if _G.AutoBlockEnabled then
-		task.defer(function()
-			GetObjects()
-			EnableAutoBlock()
-		end)
-	end
-end
 
 lp.CharacterAdded:Connect(function(char)
-	task.wait(0.5)
-	RehookAll()
-	local hum = char:WaitForChild("Humanoid", 5)
-	if hum and jumpEnabled then
-		hum.UseJumpPower = true
-		hum.JumpPower = 50
-	end
+	local hum = char:WaitForChild("Humanoid")
+	if jumpEnabled then hum.UseJumpPower = true hum.JumpPower = 50 end
 end)
 
-task.spawn(function()
-	while task.wait(1) do
-		local survivors = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Survivors")
-		if survivors and lp.Character and lp.Character.Parent == survivors then
-			if _G.AutoBlockEnabled or jumpEnabled then RehookAll() end
-			while lp.Character and lp.Character.Parent == survivors do task.wait(1) end
-		end
-	end
-end)
-
-task.spawn(function()
-	while task.wait(2) do
-		if not _G.AutoBlockEnabled then continue end
-		GetObjects()
-		if KillersFolder then
-			for _, killer in ipairs(KillersFolder:GetChildren()) do
-				if not _G.BlockHitboxData[killer] then
-					HandleKiller_Attribute(killer)
-				end
-			end
-		end
-	end
-end)
-
-task.spawn(function()
-	while task.wait(0.15) do
-		GetObjects()
-		if not Hitboxes then continue end
-		if not _G.ShowHitboxVisual then
-			for _, p in ipairs(Hitboxes:GetChildren()) do
-				if p.Name == "PreviewHitbox" then p:Destroy() end
-			end
-			continue
-		end
-		if not KillersFolder then continue end
-		local alive = {}
-		for _, killer in ipairs(KillersFolder:GetChildren()) do
-			local qh = killer:FindFirstChild("QueryHitbox")
-			if qh then
-				alive[killer.Name] = true
-				local prev
-				for _, p in ipairs(Hitboxes:GetChildren()) do
-					if p.Name == "PreviewHitbox" and p:GetAttribute("Killer") == killer.Name then
-						prev = p
-						break
-					end
-				end
-				if not prev then
-					prev = Instance.new("Part")
-					prev.Name = "PreviewHitbox"
-					prev:SetAttribute("Killer", killer.Name)
-					prev.Size = _G.BaseHitboxSize * _G.HitboxScale
-					prev.Color = Color3.fromRGB(0, 200, 255)
-					prev.Material = Enum.Material.ForceField
-					prev.Transparency = 0.6
-					prev.Anchored = true
-					prev.CanCollide = false
-					prev.CastShadow = false
-					prev.Parent = Hitboxes
-					local outline = Instance.new("SelectionBox")
-					outline.Adornee = prev
-					outline.Color3 = Color3.fromRGB(0, 200, 255)
-					outline.LineThickness = 0.02
-					outline.Transparency = 0.2
-					outline.Parent = prev
-				end
-				prev.CFrame = qh.CFrame * CFrame.new(0, _G.HitboxYOffset, _G.HitboxOffset)
-				prev.Size = _G.BaseHitboxSize * _G.HitboxScale
-			end
-		end
-		for _, p in ipairs(Hitboxes:GetChildren()) do
-			if p.Name == "PreviewHitbox" and not alive[p:GetAttribute("Killer")] then
-				p:Destroy()
-			end
-		end
-	end
-end)
-
+-- ESP
 local PlayersFolder = workspace:WaitForChild("Players")
 local oldLighting = {
 	Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient,
@@ -861,13 +685,13 @@ local oldLighting = {
 }
 local function FullBright(b)
 	if b then
-		Lighting.Ambient = Color3.new(1, 1, 1)
-		Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+		Lighting.Ambient = Color3.new(1,1,1)
+		Lighting.OutdoorAmbient = Color3.new(1,1,1)
 		Lighting.Brightness = 6
 		Lighting.FogStart = 0
 		Lighting.FogEnd = 1000000
 	else
-		for k, v in pairs(oldLighting) do Lighting[k] = v end
+		for k,v in pairs(oldLighting) do Lighting[k] = v end
 	end
 end
 local function addHL(model, color)
@@ -912,12 +736,12 @@ task.spawn(function()
 		if espEnabled then
 			if PlayersFolder:FindFirstChild("Killers") then
 				for _, v in ipairs(PlayersFolder.Killers:GetChildren()) do
-					if v:FindFirstChild("Humanoid") then addHL(v, Color3.fromRGB(255, 0, 0)) end
+					if v:FindFirstChild("Humanoid") then addHL(v, Color3.fromRGB(255,0,0)) end
 				end
 			end
 			if PlayersFolder:FindFirstChild("Survivors") then
 				for _, v in ipairs(PlayersFolder.Survivors:GetChildren()) do
-					if v:FindFirstChild("Humanoid") then addHL(v, Color3.fromRGB(0, 255, 0)) end
+					if v:FindFirstChild("Humanoid") then addHL(v, Color3.fromRGB(0,255,0)) end
 				end
 			end
 		else
@@ -930,7 +754,7 @@ task.spawn(function()
 		end
 		if showItems then
 			for _, i in ipairs(workspace:GetDescendants()) do
-				if i.Name == "Medkit" or i.Name == "BloxyCola" then addHL(i, Color3.fromRGB(180, 0, 255)) end
+				if i.Name == "Medkit" or i.Name == "BloxyCola" then addHL(i, Color3.fromRGB(180,0,255)) end
 			end
 		else
 			for _, i in ipairs(workspace:GetDescendants()) do
@@ -939,7 +763,7 @@ task.spawn(function()
 		end
 		if showGen then
 			for _, g in ipairs(cachedGens) do
-				if g and g.Parent then addHL(g, Color3.fromRGB(255, 255, 0)) end
+				if g and g.Parent then addHL(g, Color3.fromRGB(255,255,0)) end
 			end
 		else
 			for _, g in ipairs(cachedGens) do
@@ -949,9 +773,7 @@ task.spawn(function()
 	end
 end)
 
-if espEnabled then FullBright(true) end
-if _G.AutoBlockEnabled then EnableAutoBlock() end
-
+-- Hakari
 local function ToggleHakariDance(state)
 	local char = lp.Character
 	if not char then return end
@@ -964,7 +786,7 @@ local function ToggleHakariDance(state)
 		humanoid.JumpPower = 0
 		local bv = Instance.new("BodyVelocity")
 		bv.Name = "HakariBV"
-		bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+		bv.MaxForce = Vector3.new(1e5,1e5,1e5)
 		bv.Velocity = Vector3.zero
 		bv.Parent = rootPart
 		local anim = Instance.new("Animation")
@@ -981,7 +803,7 @@ local function ToggleHakariDance(state)
 		pcall(function()
 			local effect = ReplicatedStorage.Assets.Emotes.HakariDance.HakariBeamEffect:Clone()
 			effect.Name = "PlayerEmoteVFX"
-			effect.CFrame = char.PrimaryPart.CFrame * CFrame.new(0, -1, -0.3)
+			effect.CFrame = char.PrimaryPart.CFrame * CFrame.new(0,-1,-0.3)
 			effect.WeldConstraint.Part0 = char.PrimaryPart
 			effect.WeldConstraint.Part1 = effect
 			effect.Parent = char
@@ -1013,6 +835,7 @@ local function ToggleHakariDance(state)
 	end
 end
 
+-- Input
 UIS.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if waitingForKey then
@@ -1020,7 +843,6 @@ UIS.InputBegan:Connect(function(input, gp)
 			hakariKey = input.KeyCode
 			keyButton.Text = "Hakari Key: " .. input.KeyCode.Name
 			waitingForKey = false
-			SaveConfig()
 		end
 		return
 	end
@@ -1029,7 +851,6 @@ UIS.InputBegan:Connect(function(input, gp)
 			solveKey = input.KeyCode
 			solveKeyBtn.Text = "Solve Key: " .. input.KeyCode.Name
 			waitingForSolveKey = false
-			SaveConfig()
 		end
 		return
 	end
@@ -1046,6 +867,7 @@ UIS.InputBegan:Connect(function(input, gp)
 	end
 end)
 
+-- Drag
 local function MakeDrag(frame)
 	local drag, start, pos
 	frame.InputBegan:Connect(function(i)
@@ -1068,37 +890,33 @@ end
 MakeDrag(main)
 MakeDrag(mini)
 
+-- Callbacks
 infButton.MouseButton1Click:Connect(function()
 	infEnabled = not infEnabled
 	stamina.StaminaLossDisabled = infEnabled
 	infButton.Text = "Inf Stamina: " .. (infEnabled and "ON" or "OFF")
-	SaveConfig()
 end)
 jumpButton.MouseButton1Click:Connect(function()
 	jumpEnabled = not jumpEnabled
 	jumpButton.Text = "Jump: " .. (jumpEnabled and "ON" or "OFF")
 	local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
 	if hum then hum.UseJumpPower = true hum.JumpPower = jumpEnabled and 50 or 0 end
-	SaveConfig()
 end)
 espButton.MouseButton1Click:Connect(function()
 	espEnabled = not espEnabled
 	espButton.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
 	FullBright(espEnabled)
 	if not espEnabled and not showItems and not showGen then ClearAllESP() end
-	SaveConfig()
 end)
 itemButton.MouseButton1Click:Connect(function()
 	showItems = not showItems
 	itemButton.Text = "Item ESP: " .. (showItems and "ON" or "OFF")
 	if not espEnabled and not showItems and not showGen then ClearAllESP() end
-	SaveConfig()
 end)
 genButton.MouseButton1Click:Connect(function()
 	showGen = not showGen
 	genButton.Text = "Gen ESP: " .. (showGen and "ON" or "OFF")
 	if not espEnabled and not showItems and not showGen then ClearAllESP() end
-	SaveConfig()
 end)
 keyButton.MouseButton1Click:Connect(function()
 	waitingForKey = true
@@ -1109,26 +927,25 @@ solveKeyBtn.MouseButton1Click:Connect(function()
 	waitingForSolveKey = true
 	solveKeyBtn.Text = "Press any key..."
 end)
+
 autoBlockBtn.MouseButton1Click:Connect(function()
 	_G.AutoBlockEnabled = not _G.AutoBlockEnabled
 	autoBlockBtn.Text = "Auto Block: " .. (_G.AutoBlockEnabled and "ON" or "OFF")
 	if _G.AutoBlockEnabled then EnableAutoBlock() else DisableAutoBlock() end
-	SaveConfig()
 end)
 showHitboxBtn.MouseButton1Click:Connect(function()
 	_G.ShowHitboxVisual = not _G.ShowHitboxVisual
 	showHitboxBtn.Text = "Show Hitbox: " .. (_G.ShowHitboxVisual and "ON" or "OFF")
-	SaveConfig()
 end)
 scaleBox.FocusLost:Connect(function()
 	local n = tonumber(scaleBox.Text)
-	if n and n > 0 then _G.HitboxScale = n SaveConfig() else scaleBox.Text = tostring(_G.HitboxScale) end
+	if n and n > 0 then _G.HitboxScale = n else scaleBox.Text = tostring(_G.HitboxScale) end
 end)
 offsetBox.FocusLost:Connect(function()
 	local n = tonumber(offsetBox.Text)
-	if n then _G.HitboxOffset = n SaveConfig() else offsetBox.Text = tostring(_G.HitboxOffset) end
+	if n then _G.HitboxOffset = n else offsetBox.Text = tostring(_G.HitboxOffset) end
 end)
 durationBox.FocusLost:Connect(function()
 	local n = tonumber(durationBox.Text)
-	if n and n > 0 then _G.HitboxDuration = n SaveConfig() else durationBox.Text = tostring(_G.HitboxDuration) end
+	if n and n > 0 then _G.HitboxDuration = n else durationBox.Text = tostring(_G.HitboxDuration) end
 end)
