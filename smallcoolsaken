@@ -5,6 +5,7 @@ local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
 local lp = Players.LocalPlayer
 
 local Sprinting = ReplicatedStorage.Systems.Character.Game.Sprinting
@@ -15,6 +16,7 @@ stamina.StaminaGain = 100
 stamina.StaminaLoss = 5
 stamina.SprintSpeed = 28.6
 stamina.StaminaLossDisabled = true
+local CONFIG_FILE = "c00lgui_v23_config.json"
 
 -- ===== Flow Solve =====
 local flow = { nodeDelay = 0.04 }
@@ -125,7 +127,48 @@ local function SolveNow()
 		end
 	end
 end
+local function SaveConfig()
+	pcall(function()
+		local data = {
+			infEnabled = infEnabled,
+			espEnabled = espEnabled,
+			showItems = showItems,
+			showGen = showGen,
+			jumpEnabled = jumpEnabled,
+			sprintSpeed = stamina.SprintSpeed,
+			hakariKey = hakariKey.Name,
+			solveKey = solveKey.Name,
+			autoBlock = _G.AutoBlockEnabled,
+			showHitbox = _G.ShowHitboxVisual,
+			hitboxScale = _G.HitboxScale,
+			hitboxOffset = _G.HitboxOffset,
+			hitboxDuration = _G.HitboxDuration,
+		}
+		writefile(CONFIG_FILE, HttpService:JSONEncode(data))
+	end)
+end
 
+local function LoadConfig()
+	pcall(function()
+		if not isfile(CONFIG_FILE) then return end
+		local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
+		if data.infEnabled ~= nil then infEnabled = data.infEnabled end
+		if data.espEnabled ~= nil then espEnabled = data.espEnabled end
+		if data.showItems ~= nil then showItems = data.showItems end
+		if data.showGen ~= nil then showGen = data.showGen end
+		if data.jumpEnabled ~= nil then jumpEnabled = data.jumpEnabled end
+		if data.sprintSpeed then stamina.SprintSpeed = data.sprintSpeed end
+		if data.hakariKey then pcall(function() hakariKey = Enum.KeyCode[data.hakariKey] end) end
+		if data.solveKey then pcall(function() solveKey = Enum.KeyCode[data.solveKey] end) end
+		if data.autoBlock ~= nil then _G.AutoBlockEnabled = data.autoBlock end
+		if data.showHitbox ~= nil then _G.ShowHitboxVisual = data.showHitbox end
+		if data.hitboxScale then _G.HitboxScale = data.hitboxScale end
+		if data.hitboxOffset then _G.HitboxOffset = data.hitboxOffset end
+		if data.hitboxDuration then _G.HitboxDuration = data.hitboxDuration end
+	end)
+end
+
+LoadConfig()
 -- ===== AUTO BLOCK =====
 _G.BaseHitboxSize = Vector3.new(4.5, 6, 7.5)
 _G.HitboxScale = 0.9
