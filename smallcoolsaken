@@ -151,6 +151,9 @@ local function SaveConfig()
 			hitboxScale = _G.HitboxScale,
 			hitboxOffset = _G.HitboxOffset,
 			hitboxDuration = _G.HitboxDuration,
+            autoPunch = _G.AutoPunchEnabled,
+            punchAimbot = _G.PunchAimbot,
+            aimPrediction = _G.AimPrediction,
 		}
 		writefile(CONFIG_FILE, HttpService:JSONEncode(data))
 	end)
@@ -173,6 +176,9 @@ local function LoadConfig()
 		if data.hitboxScale then _G.HitboxScale = data.hitboxScale end
 		if data.hitboxOffset then _G.HitboxOffset = data.hitboxOffset end
 		if data.hitboxDuration then _G.HitboxDuration = data.hitboxDuration end
+        if data.autoPunch ~= nil then _G.AutoPunchEnabled = data.autoPunch end
+        if data.punchAimbot ~= nil then _G.PunchAimbot = data.punchAimbot end
+        if data.aimPrediction then _G.AimPrediction = data.aimPrediction end
 	end)
 end
 
@@ -191,6 +197,9 @@ _G.BlockDelay = 0
 _G.AutoBlockEnabled = false
 _G.AutoBlockConnections = {}
 _G.BlockHitboxData = {}
+_G.AutoPunchEnabled = false
+_G.PunchAimbot = false
+_G.AimPrediction = 0.8
 
 local MainUI, KillersFolder, SurvivorsFolder, Hitboxes
 local function GetObjects()
@@ -601,11 +610,15 @@ local solveButton = Btn(page3, "SOLVE", 62)
 local solveKeyBtn = Btn(page3, "Solve Key: " .. solveKey.Name, 96)
 
 -- PAGE 4: BLOCK
-local page4 = Instance.new("Frame")
-page4.Size = UDim2.new(1, 0, 1, 0)
+local page4 = Instance.new("ScrollingFrame")
+page4.Size = UDim2.new(1,0,1,0)
+page4.CanvasSize = UDim2.new(0,0,0,300)
+page4.ScrollBarThickness = 6
+page4.AutomaticCanvasSize = Enum.AutomaticSize.Y
 page4.BackgroundTransparency = 1
-page4.Visible = false
+page4.BorderSizePixel = 0
 page4.Parent = content
+page4.Visible = false
 Lbl(page4, "BLOCK", 2)
 local autoBlockBtn = Btn(page4, "Auto Block: " .. (_G.AutoBlockEnabled and "ON" or "OFF"), 18)
 local showHitboxBtn = Btn(page4, "Show Hitbox: " .. (_G.ShowHitboxVisual and "ON" or "OFF"), 46)
@@ -613,6 +626,10 @@ Lbl(page4, "Scale / Offset Z / Duration", 74)
 local scaleBox = Box(page4, _G.HitboxScale, 90)
 local offsetBox = Box(page4, _G.HitboxOffset, 116)
 local durationBox = Box(page4, _G.HitboxDuration, 142)
+local autoPunchBtn = Btn(page4,"Auto Punch: "..(_G.AutoPunchEnabled and "ON" or "OFF"),174)
+local aimPunchBtn = Btn(page4,"Punch Aimbot: "..(_G.PunchAimbot and "ON" or "OFF"),206)
+Lbl(page4,"Aim Prediction",238)
+local predictBox = Box(page4,_G.AimPrediction,254)
 
 local pages = { page1, page2, page3, page4 }
 
@@ -1069,6 +1086,27 @@ durationBox.FocusLost:Connect(function()
 	else
 		durationBox.Text = tostring(_G.HitboxDuration)
 	end
+end)
+autoPunchBtn.MouseButton1Click:Connect(function()
+    _G.AutoPunchEnabled = not _G.AutoPunchEnabled
+    autoPunchBtn.Text = "Auto Punch: "..(_G.AutoPunchEnabled and "ON" or "OFF")
+    SaveConfig()
+end)
+
+aimPunchBtn.MouseButton1Click:Connect(function()
+    _G.PunchAimbot = not _G.PunchAimbot
+    aimPunchBtn.Text = "Punch Aimbot: "..(_G.PunchAimbot and "ON" or "OFF")
+    SaveConfig()
+end)
+
+predictBox.FocusLost:Connect(function()
+    local n = tonumber(predictBox.Text)
+    if n then
+        _G.AimPrediction = n
+        SaveConfig()
+    else
+        predictBox.Text = tostring(_G.AimPrediction)
+    end
 end)
 
 -- Áp FullBright + AutoBlock nếu config đã bật sẵn
