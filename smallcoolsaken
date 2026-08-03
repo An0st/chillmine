@@ -7,7 +7,8 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local lp = Players.LocalPlayer
-local Sprinting = ReplicatedStorage.Systems.Character.Game.Sprinting
+
+local Sprinting = ReplicatedStorage:WaitForChild("Systems"):WaitForChild("Character"):WaitForChild("Game"):WaitForChild("Sprinting")
 local stamina = require(Sprinting)
 stamina.MaxStamina = 100
 stamina.MinStamina = -20
@@ -15,6 +16,7 @@ stamina.StaminaGain = 100
 stamina.StaminaLoss = 5
 stamina.SprintSpeed = 28.6
 stamina.StaminaLossDisabled = true
+
 local CONFIG_FILE = "c00lgui_v23_config.json"
 
 -- ===== Flow Solve =====
@@ -96,6 +98,7 @@ local function flowSolve(puzzle)
 		end
 	end)
 end
+
 local currentPuzzle = nil
 pcall(function()
 	local modFolder = ReplicatedStorage:FindFirstChild("Modules")
@@ -114,6 +117,7 @@ pcall(function()
 		end
 	end
 end)
+
 local function SolveNow()
 	if currentPuzzle then
 		flowSolve(currentPuzzle)
@@ -127,7 +131,7 @@ local function SolveNow()
 	end
 end
 
--- ===== STATES (khai báo sớm để LoadConfig dùng được) =====
+-- ===== STATES =====
 local infEnabled, espEnabled, showItems, showGen, jumpEnabled = false, false, false, false, false
 local hidden = false
 local currentPage, totalPages = 1, 4
@@ -151,9 +155,7 @@ local function SaveConfig()
 			hitboxScale = _G.HitboxScale,
 			hitboxOffset = _G.HitboxOffset,
 			hitboxDuration = _G.HitboxDuration,
-            autoPunch = _G.AutoPunchEnabled,
-            punchAimbot = _G.PunchAimbot,
-            aimPrediction = _G.AimPrediction,
+			autoPunch = _G.AutoPunchEnabled,
 		}
 		writefile(CONFIG_FILE, HttpService:JSONEncode(data))
 	end)
@@ -176,13 +178,11 @@ local function LoadConfig()
 		if data.hitboxScale then _G.HitboxScale = data.hitboxScale end
 		if data.hitboxOffset then _G.HitboxOffset = data.hitboxOffset end
 		if data.hitboxDuration then _G.HitboxDuration = data.hitboxDuration end
-        if data.autoPunch ~= nil then _G.AutoPunchEnabled = data.autoPunch end
-        if data.punchAimbot ~= nil then _G.PunchAimbot = data.punchAimbot end
-        if data.aimPrediction then _G.AimPrediction = data.aimPrediction end
+		if data.autoPunch ~= nil then _G.AutoPunchEnabled = data.autoPunch end
 	end)
 end
 
--- ===== AUTO BLOCK =====
+-- ===== AUTO BLOCK (FIXED) =====
 _G.BaseHitboxSize = Vector3.new(4.5, 6, 7.5)
 _G.HitboxScale = 0.9
 _G.HitboxOffset = -1.8
@@ -198,14 +198,12 @@ _G.AutoBlockEnabled = false
 _G.AutoBlockConnections = {}
 _G.BlockHitboxData = {}
 _G.AutoPunchEnabled = false
-_G.PunchAimbot = false
-_G.AimPrediction = 0.8
 
 local MainUI, KillersFolder, SurvivorsFolder, Hitboxes
 local function GetObjects()
 	MainUI = lp.PlayerGui:FindFirstChild("MainUI")
 	KillersFolder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Killers")
-	SurvivorsFolder = Workspace.Players and Workspace.Players:FindFirstChild("Survivors")
+	SurvivorsFolder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Survivors")
 	Hitboxes = Workspace:FindFirstChild("Hitboxes") or Instance.new("Folder", Workspace)
 	Hitboxes.Name = "Hitboxes"
 end
@@ -278,9 +276,9 @@ local function ClearKillerBlockHitbox(Killer)
 	end
 end
 
-local OverlapParams = OverlapParams.new()
-OverlapParams.MaxParts = 1
-OverlapParams.FilterType = Enum.RaycastFilterType.Include
+local OverlapParamsObj = OverlapParams.new()
+OverlapParamsObj.MaxParts = 1
+OverlapParamsObj.FilterType = Enum.RaycastFilterType.Include
 
 local function StartBlockDetection(Killer, queryHitbox)
 	ClearKillerBlockHitbox(Killer)
@@ -309,66 +307,31 @@ local function StartBlockDetection(Killer, queryHitbox)
 		task.delay(_G.HitboxDuration, function() ClearKillerBlockHitbox(Killer) end)
 		return
 	end
+
 	local hitboxSize = _G.BaseHitboxSize * _G.HitboxScale
 	local startTime = tick()
-	local instantPart = Instance.new("Part")
-	instantPart.Size = hitboxSize
-	instantPart.CanCollide = false
-	instantPart.Anchored = true
-	instantPart.Transparency = 1
-	instantPart.Parent = Hitboxes
 	local heartbeatPart = Instance.new("Part")
 	heartbeatPart.Size = hitboxSize
 	heartbeatPart.CanCollide = false
 	heartbeatPart.Anchored = true
 	heartbeatPart.Transparency = 1
 	heartbeatPart.Parent = Hitboxes
-	OverlapParams.FilterDescendantsInstances = { localQuery }
-	instantPart.CFrame = queryHitbox.CFrame * CFrame.new(0, _G.HitboxYOffset, _G.HitboxOffset)
-	local instantHits = Workspace:GetPartsInPart(instantPart, OverlapParams)
-	if #instantHits > 0 then
-		pressBlock()
-		instantPart:Destroy()
-		heartbeatPart:Destroy()
-		ClearKillerBlockHitbox(Killer)
-		return
-	end
+
+	OverlapParamsObj.FilterDescendantsInstances = { localQuery }
+
 	local heartbeatConn
 	heartbeatConn = RunService.Heartbeat:Connect(function()
-		if not _G.AutoBlockEnabled then
+		if not _G.AutoBlockEnabled or (tick() - startTime > _G.HitboxDuration) or not localChar.Parent or not queryHitbox or not queryHitbox.Parent then
 			heartbeatConn:Disconnect()
-			instantPart:Destroy()
-			heartbeatPart:Destroy()
-			ClearKillerBlockHitbox(Killer)
-			return
-		end
-		if tick() - startTime > _G.HitboxDuration then
-			heartbeatConn:Disconnect()
-			instantPart:Destroy()
-			heartbeatPart:Destroy()
-			ClearKillerBlockHitbox(Killer)
-			return
-		end
-		if not localChar.Parent or not SurvivorsFolder or localChar.Parent ~= SurvivorsFolder then
-			heartbeatConn:Disconnect()
-			instantPart:Destroy()
-			heartbeatPart:Destroy()
-			ClearKillerBlockHitbox(Killer)
-			return
-		end
-		if not queryHitbox or not queryHitbox.Parent then
-			heartbeatConn:Disconnect()
-			instantPart:Destroy()
 			heartbeatPart:Destroy()
 			ClearKillerBlockHitbox(Killer)
 			return
 		end
 		heartbeatPart.CFrame = queryHitbox.CFrame * CFrame.new(0, _G.HitboxYOffset, _G.HitboxOffset)
-		local hits = Workspace:GetPartsInPart(heartbeatPart, OverlapParams)
+		local hits = Workspace:GetPartsInPart(heartbeatPart, OverlapParamsObj)
 		if #hits > 0 then
 			pressBlock()
 			heartbeatConn:Disconnect()
-			instantPart:Destroy()
 			heartbeatPart:Destroy()
 			ClearKillerBlockHitbox(Killer)
 		end
@@ -378,24 +341,21 @@ end
 
 local function HandleKiller_Attribute(Killer)
 	if not Players:GetPlayerFromCharacter(Killer) then return end
-	local queryHitbox = Killer:FindFirstChild("QueryHitbox")
+	local queryHitbox = Killer:FindFirstChild("QueryHitbox") or Killer:WaitForChild("QueryHitbox", 5)
 	if not queryHitbox then return end
-	local abilityConn
-	local function doBlock()
+
+	local abilityConn = Killer:GetAttributeChangedSignal("AbilityLastUsed"):Connect(function()
 		if not _G.AutoBlockEnabled then return end
 		StartBlockDetection(Killer, queryHitbox)
-	end
-	local function onAbilityLastUsed()
-		if not _G.AutoBlockEnabled then return end
-		doBlock()
-	end
-	abilityConn = Killer:GetAttributeChangedSignal("AbilityLastUsed"):Connect(onAbilityLastUsed)
+	end)
+
 	Killer.AncestryChanged:Connect(function()
 		if not Killer.Parent then
 			abilityConn:Disconnect()
 			ClearKillerBlockHitbox(Killer)
 		end
 	end)
+
 	table.insert(_G.AutoBlockConnections, {
 		Disconnect = function()
 			abilityConn:Disconnect()
@@ -404,40 +364,29 @@ local function HandleKiller_Attribute(Killer)
 end
 
 local function EnableAutoBlock()
-	if _G.AutoBlockEnabled then
-		for _, con in ipairs(_G.AutoBlockConnections) do
-			pcall(con.Disconnect, con)
+	for _, con in ipairs(_G.AutoBlockConnections) do pcall(con.Disconnect, con) end
+	_G.AutoBlockConnections = {}
+	GetObjects()
+	if KillersFolder then
+		for _, killer in ipairs(KillersFolder:GetChildren()) do
+			HandleKiller_Attribute(killer)
 		end
-		_G.AutoBlockConnections = {}
-		GetObjects()
-		if KillersFolder then
-			for _, killer in ipairs(KillersFolder:GetChildren()) do
-				HandleKiller_Attribute(killer)
-			end
-			local childCon = KillersFolder.ChildAdded:Connect(HandleKiller_Attribute)
-			table.insert(_G.AutoBlockConnections, {
-				Disconnect = function() childCon:Disconnect() end
-			})
-		end
+		local childCon = KillersFolder.ChildAdded:Connect(HandleKiller_Attribute)
+		table.insert(_G.AutoBlockConnections, { Disconnect = function() childCon:Disconnect() end })
 	end
 end
 
 local function DisableAutoBlock()
-	if not _G.AutoBlockEnabled then
-		for _, con in ipairs(_G.AutoBlockConnections) do
-			pcall(con.Disconnect, con)
-		end
-		_G.AutoBlockConnections = {}
-		for killer, data in pairs(_G.BlockHitboxData) do
-			if data.visualPart then data.visualPart:Destroy() end
-			if data.visualConnection then data.visualConnection:Disconnect() end
-			if data.heartbeatConnection then data.heartbeatConnection:Disconnect() end
-		end
-		_G.BlockHitboxData = {}
+	for _, con in ipairs(_G.AutoBlockConnections) do pcall(con.Disconnect, con) end
+	_G.AutoBlockConnections = {}
+	for killer, data in pairs(_G.BlockHitboxData) do
+		if data.visualPart then data.visualPart:Destroy() end
+		if data.visualConnection then data.visualConnection:Disconnect() end
+		if data.heartbeatConnection then data.heartbeatConnection:Disconnect() end
 	end
+	_G.BlockHitboxData = {}
 end
 
--- Load config sau khi đã có _G defaults
 LoadConfig()
 
 -- ===== GUI =====
@@ -576,7 +525,7 @@ local function Box(parent, default, y)
 	return t
 end
 
--- PAGE 1: STAMINA
+-- PAGE 1 STAMINA
 local page1 = Instance.new("Frame")
 page1.Size = UDim2.new(1, 0, 1, 0)
 page1.BackgroundTransparency = 1
@@ -584,21 +533,21 @@ page1.Visible = true
 page1.Parent = content
 Lbl(page1, "STAMINA", 6)
 local speedBox = Box(page1, stamina.SprintSpeed, 28)
-local infButton = Btn(page1, "Inf Stamina: " .. (infEnabled and "ON" or "OFF"), 60)
-local jumpButton = Btn(page1, "Jump: " .. (jumpEnabled and "ON" or "OFF"), 94)
+local infButton = Btn(page1, "Inf Stamina " .. (infEnabled and "ON" or "OFF"), 60)
+local jumpButton = Btn(page1, "Jump " .. (jumpEnabled and "ON" or "OFF"), 94)
 
--- PAGE 2: ESP
+-- PAGE 2 ESP
 local page2 = Instance.new("Frame")
 page2.Size = UDim2.new(1, 0, 1, 0)
 page2.BackgroundTransparency = 1
 page2.Visible = false
 page2.Parent = content
 Lbl(page2, "ESP", 6)
-local espButton = Btn(page2, "ESP: " .. (espEnabled and "ON" or "OFF"), 28)
-local itemButton = Btn(page2, "Item ESP: " .. (showItems and "ON" or "OFF"), 62)
-local genButton = Btn(page2, "Gen ESP: " .. (showGen and "ON" or "OFF"), 96)
+local espButton = Btn(page2, "ESP " .. (espEnabled and "ON" or "OFF"), 28)
+local itemButton = Btn(page2, "Item ESP " .. (showItems and "ON" or "OFF"), 62)
+local genButton = Btn(page2, "Gen ESP " .. (showGen and "ON" or "OFF"), 96)
 
--- PAGE 3: MISC
+-- PAGE 3 MISC
 local page3 = Instance.new("Frame")
 page3.Size = UDim2.new(1, 0, 1, 0)
 page3.BackgroundTransparency = 1
@@ -609,10 +558,10 @@ local keyButton = Btn(page3, "Hakari Key: " .. hakariKey.Name, 28)
 local solveButton = Btn(page3, "SOLVE", 62)
 local solveKeyBtn = Btn(page3, "Solve Key: " .. solveKey.Name, 96)
 
--- PAGE 4: BLOCK
+-- PAGE 4 BLOCK
 local page4 = Instance.new("ScrollingFrame")
 page4.Size = UDim2.new(1,0,1,0)
-page4.CanvasSize = UDim2.new(0,0,0,300)
+page4.CanvasSize = UDim2.new(0,0,0,210)
 page4.ScrollBarThickness = 6
 page4.AutomaticCanvasSize = Enum.AutomaticSize.Y
 page4.BackgroundTransparency = 1
@@ -620,16 +569,13 @@ page4.BorderSizePixel = 0
 page4.Parent = content
 page4.Visible = false
 Lbl(page4, "BLOCK", 2)
-local autoBlockBtn = Btn(page4, "Auto Block: " .. (_G.AutoBlockEnabled and "ON" or "OFF"), 18)
-local showHitboxBtn = Btn(page4, "Show Hitbox: " .. (_G.ShowHitboxVisual and "ON" or "OFF"), 46)
-Lbl(page4, "Scale / Offset Z / Duration", 74)
+local autoBlockBtn = Btn(page4, "Auto Block " .. (_G.AutoBlockEnabled and "ON" or "OFF"), 18)
+local showHitboxBtn = Btn(page4, "Show Hitbox " .. (_G.ShowHitboxVisual and "ON" or "OFF"), 46)
+Lbl(page4, "Scale | Offset Z | Duration", 74)
 local scaleBox = Box(page4, _G.HitboxScale, 90)
 local offsetBox = Box(page4, _G.HitboxOffset, 116)
 local durationBox = Box(page4, _G.HitboxDuration, 142)
-local autoPunchBtn = Btn(page4,"Auto Punch: "..(_G.AutoPunchEnabled and "ON" or "OFF"),174)
-local aimPunchBtn = Btn(page4,"Punch Aimbot: "..(_G.PunchAimbot and "ON" or "OFF"),206)
-Lbl(page4,"Aim Prediction",238)
-local predictBox = Box(page4,_G.AimPrediction,254)
+local autoPunchBtn = Btn(page4, "Auto Punch " .. (_G.AutoPunchEnabled and "ON" or "OFF"), 174)
 
 local pages = { page1, page2, page3, page4 }
 
@@ -745,37 +691,32 @@ speedBox.FocusLost:Connect(function()
 	end
 end)
 
--- Áp lại tính năng khi character respawn
 lp.CharacterAdded:Connect(function(char)
 	local hum = char:WaitForChild("Humanoid", 5)
 	if not hum then return end
 
-	-- Jump
 	if jumpEnabled then
 		hum.UseJumpPower = true
 		hum.JumpPower = 50
 	end
 
-	-- Inf Stamina
 	if infEnabled then
 		stamina.StaminaLossDisabled = true
 		stamina.Stamina = stamina.MaxStamina
 	end
 
-	-- Sprint Speed
 	stamina.SprintSpeed = tonumber(speedBox.Text) or stamina.SprintSpeed
 
-	-- Auto Block (re-enable nếu đang bật)
 	if _G.AutoBlockEnabled then
 		task.defer(function()
-			task.wait(0.5) -- đợi MainUI / folders load
+			task.wait(0.5)
 			EnableAutoBlock()
 		end)
 	end
 end)
 
 -- ESP
-local PlayersFolder = workspace:WaitForChild("Players")
+local PlayersFolder = Workspace:WaitForChild("Players")
 local oldLighting = {
 	Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient,
 	Brightness = Lighting.Brightness, FogStart = Lighting.FogStart, FogEnd = Lighting.FogEnd
@@ -812,7 +753,7 @@ local function removeHL(model)
 end
 
 local function ClearAllESP()
-	for _, v in ipairs(workspace:GetDescendants()) do
+	for _, v in ipairs(Workspace:GetDescendants()) do
 		if v:IsA("Highlight") and v.Name == "ESP_HL" then v:Destroy() end
 	end
 end
@@ -820,7 +761,7 @@ end
 local cachedGens = {}
 local function RefreshGens()
 	cachedGens = {}
-	for _, g in ipairs(workspace:GetDescendants()) do
+	for _, g in ipairs(Workspace:GetDescendants()) do
 		if g.Name:lower():find("generator") then
 			table.insert(cachedGens, g)
 		end
@@ -853,11 +794,11 @@ task.spawn(function()
 			end
 		end
 		if showItems then
-			for _, i in ipairs(workspace:GetDescendants()) do
+			for _, i in ipairs(Workspace:GetDescendants()) do
 				if i.Name == "Medkit" or i.Name == "BloxyCola" then addHL(i, Color3.fromRGB(180,0,255)) end
 			end
 		else
-			for _, i in ipairs(workspace:GetDescendants()) do
+			for _, i in ipairs(Workspace:GetDescendants()) do
 				if i.Name == "Medkit" or i.Name == "BloxyCola" then removeHL(i) end
 			end
 		end
@@ -992,17 +933,17 @@ end
 MakeDrag(main)
 MakeDrag(mini)
 
--- Callbacks (có SaveConfig)
+-- Callbacks
 infButton.MouseButton1Click:Connect(function()
 	infEnabled = not infEnabled
 	stamina.StaminaLossDisabled = infEnabled
-	infButton.Text = "Inf Stamina: " .. (infEnabled and "ON" or "OFF")
+	infButton.Text = "Inf Stamina " .. (infEnabled and "ON" or "OFF")
 	SaveConfig()
 end)
 
 jumpButton.MouseButton1Click:Connect(function()
 	jumpEnabled = not jumpEnabled
-	jumpButton.Text = "Jump: " .. (jumpEnabled and "ON" or "OFF")
+	jumpButton.Text = "Jump " .. (jumpEnabled and "ON" or "OFF")
 	local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
 	if hum then
 		hum.UseJumpPower = true
@@ -1013,7 +954,7 @@ end)
 
 espButton.MouseButton1Click:Connect(function()
 	espEnabled = not espEnabled
-	espButton.Text = "ESP: " .. (espEnabled and "ON" or "OFF")
+	espButton.Text = "ESP " .. (espEnabled and "ON" or "OFF")
 	FullBright(espEnabled)
 	if not espEnabled and not showItems and not showGen then ClearAllESP() end
 	SaveConfig()
@@ -1021,14 +962,14 @@ end)
 
 itemButton.MouseButton1Click:Connect(function()
 	showItems = not showItems
-	itemButton.Text = "Item ESP: " .. (showItems and "ON" or "OFF")
+	itemButton.Text = "Item ESP " .. (showItems and "ON" or "OFF")
 	if not espEnabled and not showItems and not showGen then ClearAllESP() end
 	SaveConfig()
 end)
 
 genButton.MouseButton1Click:Connect(function()
 	showGen = not showGen
-	genButton.Text = "Gen ESP: " .. (showGen and "ON" or "OFF")
+	genButton.Text = "Gen ESP " .. (showGen and "ON" or "OFF")
 	if not espEnabled and not showItems and not showGen then ClearAllESP() end
 	SaveConfig()
 end)
@@ -1047,14 +988,14 @@ end)
 
 autoBlockBtn.MouseButton1Click:Connect(function()
 	_G.AutoBlockEnabled = not _G.AutoBlockEnabled
-	autoBlockBtn.Text = "Auto Block: " .. (_G.AutoBlockEnabled and "ON" or "OFF")
+	autoBlockBtn.Text = "Auto Block " .. (_G.AutoBlockEnabled and "ON" or "OFF")
 	if _G.AutoBlockEnabled then EnableAutoBlock() else DisableAutoBlock() end
 	SaveConfig()
 end)
 
 showHitboxBtn.MouseButton1Click:Connect(function()
 	_G.ShowHitboxVisual = not _G.ShowHitboxVisual
-	showHitboxBtn.Text = "Show Hitbox: " .. (_G.ShowHitboxVisual and "ON" or "OFF")
+	showHitboxBtn.Text = "Show Hitbox " .. (_G.ShowHitboxVisual and "ON" or "OFF")
 	SaveConfig()
 end)
 
@@ -1087,29 +1028,13 @@ durationBox.FocusLost:Connect(function()
 		durationBox.Text = tostring(_G.HitboxDuration)
 	end
 end)
+
 autoPunchBtn.MouseButton1Click:Connect(function()
     _G.AutoPunchEnabled = not _G.AutoPunchEnabled
-    autoPunchBtn.Text = "Auto Punch: "..(_G.AutoPunchEnabled and "ON" or "OFF")
+    autoPunchBtn.Text = "Auto Punch " .. (_G.AutoPunchEnabled and "ON" or "OFF")
     SaveConfig()
 end)
 
-aimPunchBtn.MouseButton1Click:Connect(function()
-    _G.PunchAimbot = not _G.PunchAimbot
-    aimPunchBtn.Text = "Punch Aimbot: "..(_G.PunchAimbot and "ON" or "OFF")
-    SaveConfig()
-end)
-
-predictBox.FocusLost:Connect(function()
-    local n = tonumber(predictBox.Text)
-    if n then
-        _G.AimPrediction = n
-        SaveConfig()
-    else
-        predictBox.Text = tostring(_G.AimPrediction)
-    end
-end)
-
--- Áp FullBright + AutoBlock nếu config đã bật sẵn
 if espEnabled then FullBright(true) end
 if _G.AutoBlockEnabled then
 	task.defer(EnableAutoBlock)
