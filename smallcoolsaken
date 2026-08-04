@@ -6,8 +6,10 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
-local lp = Players.LocalPlayer
+local Debris = game:GetService("Debris")
+local LP = Players.LocalPlayer
 
+-- ===== STAMINA MODIFICATIONS =====
 local Sprinting = ReplicatedStorage:WaitForChild("Systems"):WaitForChild("Character"):WaitForChild("Game"):WaitForChild("Sprinting")
 local stamina = require(Sprinting)
 stamina.MaxStamina = 100
@@ -17,9 +19,84 @@ stamina.StaminaLoss = 5
 stamina.SprintSpeed = 28.6
 stamina.StaminaLossDisabled = true
 
-local CONFIG_FILE = "c00lgui_v23_config.json"
+local CONFIG_FILE = "c00lgui_v24_config.json"
 
--- ===== Flow Solve =====
+-- ===== BACKSTAB SETTINGS =====
+local stabEnabled = false
+local stabRange = 8
+local stabMode = "Behind"
+local BACKSTAB_DISTANCE = 1.8
+local BACKSTAB_HOLD_TIME = 0.35
+local BACKSTAB_COOLDOWN = 10
+local lastBackstabTime = 0
+
+local killerNames = {
+	"Slasher", "Jason", "c00lkidd", "JohnDoe", "1x1x1x1", "Noli", "Nosferatu", "Sixer", "Azure"
+}
+
+-- ===== VOIDRUSH CONTROLLER LOGIC =====
+local voidrushcontrol = false
+local ORIGINAL_DASH_SPEED = 55
+local isOverrideActive = false
+local voidrushConnection
+
+local function setupCharacter(character)
+	if not character then return end
+	local Humanoid = character:FindFirstChild("Humanoid")
+	local HumanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+	if Humanoid and HumanoidRootPart then
+		_G.Humanoid = Humanoid
+		_G.HumanoidRootPart = HumanoidRootPart
+	end
+end
+
+if LP.Character then setupCharacter(LP.Character) end
+LP.CharacterAdded:Connect(setupCharacter)
+
+local function startOverride()
+	if isOverrideActive then return end
+	isOverrideActive = true
+	voidrushConnection = RunService.RenderStepped:Connect(function()
+		local humanoid = _G.Humanoid
+		local rootPart = _G.HumanoidRootPart
+		if not humanoid or not rootPart then return end
+		humanoid.WalkSpeed = ORIGINAL_DASH_SPEED
+		humanoid.AutoRotate = false
+		local direction = rootPart.CFrame.LookVector
+		local horizontal = Vector3.new(direction.X, 0, direction.Z)
+		if horizontal.Magnitude > 0 then
+			humanoid:Move(horizontal.Unit)
+		end
+	end)
+end
+
+local function stopOverride()
+	if not isOverrideActive then return end
+	isOverrideActive = false
+	local humanoid = _G.Humanoid
+	if humanoid then
+		humanoid.WalkSpeed = 18
+		humanoid.AutoRotate = true
+		humanoid:Move(Vector3.new(0, 0, 0))
+	end
+	if voidrushConnection then
+		voidrushConnection:Disconnect()
+		voidrushConnection = nil
+	end
+end
+
+RunService.RenderStepped:Connect(function()
+	if not voidrushcontrol then return end
+	local char = _G.Humanoid and _G.Humanoid.Parent
+	local voidRushState = char and char:GetAttribute("VoidRushState")
+	if voidRushState == "Dashing" then
+		startOverride()
+	else
+		stopOverride()
+	end
+end)
+
+-- ===== FLOW SOLVE LOGIC =====
 local flow = { nodeDelay = 0.01 }
 local function flowKey(n) return n.row .. "-" .. n.col end
 local function flowNeighbour(r1, c1, r2, c2)
@@ -130,11 +207,33 @@ local function SolveNow()
 		end
 	end
 end
+-- ==== AUTOBLOCK ====
+_G.BaseHitboxSize = Vector3.new(4.5, 6, 7.5)
+_G.HitboxScale = 1.5
+_G.HitboxOffset = -1.8
+_G.HitboxColor = Color3.fromRGB(255, 255, 255)
+_G.ShowOutline = true
+_G.OutlineThickness = 0.01
+_G.ShowHitboxVisual = true
+_G.HitboxTransparency = 0.5
+_G.HitboxDuration = 0.3
+_G.BlockDelay = 0
+_G.AutoBlockEnabled = false
+_G.AutoBlockConnections = {}
+_G.DragEnabled = false
+_G.DragHitboxScale = 1.0
+_G.DragHitboxOffset = -1.4
+_G.DragHitboxDuration = 1.5
+_G.DragHitboxColor = Color3.fromRGB(100, 255, 100)
+_G.DragHitboxTransparency = 0.5
+_G.BlockHitboxData = {}
+_G.DragHitboxData = {}
+_G.AutoPunchEnabled = false
 
 -- ===== STATES =====
 local infEnabled, espEnabled, showItems, showGen, jumpEnabled = false, false, false, false, false
 local hidden = false
-local currentPage, totalPages = 1, 4
+local currentPage, totalPages = 1, 5
 local hakariKey, solveKey = Enum.KeyCode.B, Enum.KeyCode.H
 local waitingForKey, waitingForSolveKey = false, false
 local hakariActive = false
@@ -151,11 +250,16 @@ local function SaveConfig()
 			hakariKey = hakariKey.Name,
 			solveKey = solveKey.Name,
 			autoBlock = _G.AutoBlockEnabled,
+			dragEnabled = _G.DragEnabled,
 			showHitbox = _G.ShowHitboxVisual,
 			hitboxScale = _G.HitboxScale,
 			hitboxOffset = _G.HitboxOffset,
 			hitboxDuration = _G.HitboxDuration,
 			autoPunch = _G.AutoPunchEnabled,
+			stabEnabled = stabEnabled,
+			stabRange = stabRange,
+			stabMode = stabMode,
+			voidrushcontrol = voidrushcontrol,
 		}
 		writefile(CONFIG_FILE, HttpService:JSONEncode(data))
 	end)
@@ -174,34 +278,24 @@ local function LoadConfig()
 		if data.hakariKey then pcall(function() hakariKey = Enum.KeyCode[data.hakariKey] end) end
 		if data.solveKey then pcall(function() solveKey = Enum.KeyCode[data.solveKey] end) end
 		if data.autoBlock ~= nil then _G.AutoBlockEnabled = data.autoBlock end
+		if data.dragEnabled ~= nil then _G.DragEnabled = data.dragEnabled end
 		if data.showHitbox ~= nil then _G.ShowHitboxVisual = data.showHitbox end
 		if data.hitboxScale then _G.HitboxScale = data.hitboxScale end
 		if data.hitboxOffset then _G.HitboxOffset = data.hitboxOffset end
 		if data.hitboxDuration then _G.HitboxDuration = data.hitboxDuration end
 		if data.autoPunch ~= nil then _G.AutoPunchEnabled = data.autoPunch end
+		if data.stabEnabled ~= nil then stabEnabled = data.stabEnabled end
+		if data.stabRange ~= nil then stabRange = data.stabRange end
+		if data.stabMode ~= nil then stabMode = data.stabMode end
+		if data.voidrushcontrol ~= nil then voidrushcontrol = data.voidrushcontrol end
 	end)
 end
 
--- ===== AUTO BLOCK (FIXED) =====
-_G.BaseHitboxSize = Vector3.new(4.5, 6, 7.5)
-_G.HitboxScale = 0.9
-_G.HitboxOffset = -1.8
-_G.HitboxYOffset = 1.5
-_G.HitboxColor = Color3.fromRGB(255, 255, 255)
-_G.ShowOutline = true
-_G.OutlineThickness = 0.01
-_G.ShowHitboxVisual = true
-_G.HitboxTransparency = 0.5
-_G.HitboxDuration = 0.1
-_G.BlockDelay = 0
-_G.AutoBlockEnabled = false
-_G.AutoBlockConnections = {}
-_G.BlockHitboxData = {}
-_G.AutoPunchEnabled = false
-
+-- ===== NEW AUTO BLOCK SYSTEM =====
 local MainUI, KillersFolder, SurvivorsFolder, Hitboxes
+
 local function GetObjects()
-	MainUI = lp.PlayerGui:FindFirstChild("MainUI")
+	MainUI = LP.PlayerGui:FindFirstChild("MainUI")
 	KillersFolder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Killers")
 	SurvivorsFolder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Survivors")
 	Hitboxes = Workspace:FindFirstChild("Hitboxes") or Instance.new("Folder", Workspace)
@@ -209,15 +303,17 @@ local function GetObjects()
 end
 GetObjects()
 
-local function getBlockButton()
+local function getActionButton(name)
 	if not MainUI then return nil end
 	local container = MainUI:FindFirstChild("AbilityContainer")
 	if not container then return nil end
-	return container:FindFirstChild("Block") or container:FindFirstChild("Guard")
+	return container:FindFirstChild(name)
 end
 
-local function pressBlock()
-	local btn = getBlockButton()
+local function getBlockButton() return getActionButton("Block") or getActionButton("Guard") end
+local function getPunchButton() return getActionButton("Punch") or getActionButton("Attack") or getActionButton("Slap") end
+
+local function pressButton(btn)
 	if not btn then return false end
 	local cd = btn:FindFirstChild("CooldownTime")
 	if cd and cd.Text ~= "" then return false end
@@ -227,6 +323,9 @@ local function pressBlock()
 	end
 	return true
 end
+
+local function pressBlock() return pressButton(getBlockButton()) end
+local function pressPunch() return pressButton(getPunchButton()) end
 
 local function CreateBlockHitboxVisual()
 	local part = Instance.new("Part")
@@ -253,13 +352,51 @@ end
 
 local function UpdateBlockHitboxPosition(part, queryHitbox)
 	if part and queryHitbox then
-		part.CFrame = queryHitbox.CFrame * CFrame.new(0, _G.HitboxYOffset, _G.HitboxOffset)
+		part.CFrame = queryHitbox.CFrame * CFrame.new(0, 0, _G.HitboxOffset)
 		part.Size = _G.BaseHitboxSize * _G.HitboxScale
 		part.Color = _G.HitboxColor
 		part.Transparency = 1 - _G.HitboxTransparency
 		local outline = part:FindFirstChildOfClass("SelectionBox")
 		if outline then
 			outline.Color3 = _G.HitboxColor
+			outline.LineThickness = _G.OutlineThickness
+			outline.Visible = _G.ShowOutline and _G.ShowHitboxVisual
+		end
+	end
+end
+
+local function CreateDragHitboxVisual()
+	local part = Instance.new("Part")
+	part.Name = "DragHitboxVisual"
+	part.Size = _G.BaseHitboxSize * _G.DragHitboxScale
+	part.Color = _G.DragHitboxColor
+	part.Material = Enum.Material.ForceField
+	part.Transparency = 1 - _G.DragHitboxTransparency
+	part.Anchored = true
+	part.CanCollide = false
+	part.CastShadow = false
+	part.Parent = Hitboxes
+	if _G.ShowOutline then
+		local outline = Instance.new("SelectionBox")
+		outline.Adornee = part
+		outline.Color3 = _G.DragHitboxColor
+		outline.LineThickness = _G.OutlineThickness
+		outline.Transparency = 0.1
+		outline.Visible = _G.ShowHitboxVisual
+		outline.Parent = part
+	end
+	return part
+end
+
+local function UpdateDragHitboxPosition(part, queryHitbox)
+	if part and queryHitbox then
+		part.CFrame = queryHitbox.CFrame * CFrame.new(0, 0, _G.DragHitboxOffset)
+		part.Size = _G.BaseHitboxSize * _G.DragHitboxScale
+		part.Color = _G.DragHitboxColor
+		part.Transparency = 1 - _G.DragHitboxTransparency
+		local outline = part:FindFirstChildOfClass("SelectionBox")
+		if outline then
+			outline.Color3 = _G.DragHitboxColor
 			outline.LineThickness = _G.OutlineThickness
 			outline.Visible = _G.ShowOutline and _G.ShowHitboxVisual
 		end
@@ -276,6 +413,15 @@ local function ClearKillerBlockHitbox(Killer)
 	end
 end
 
+local function ClearKillerDragHitbox(Killer)
+	local data = _G.DragHitboxData[Killer]
+	if data then
+		if data.part then data.part:Destroy() end
+		if data.connection then data.connection:Disconnect() end
+		_G.DragHitboxData[Killer] = nil
+	end
+end
+
 local OverlapParamsObj = OverlapParams.new()
 OverlapParamsObj.MaxParts = 1
 OverlapParamsObj.FilterType = Enum.RaycastFilterType.Include
@@ -284,6 +430,7 @@ local function StartBlockDetection(Killer, queryHitbox)
 	ClearKillerBlockHitbox(Killer)
 	local visualPart = CreateBlockHitboxVisual()
 	UpdateBlockHitboxPosition(visualPart, queryHitbox)
+
 	local visualConnection = RunService.Heartbeat:Connect(function()
 		if visualPart and visualPart.Parent and queryHitbox and queryHitbox.Parent then
 			UpdateBlockHitboxPosition(visualPart, queryHitbox)
@@ -291,13 +438,15 @@ local function StartBlockDetection(Killer, queryHitbox)
 			visualConnection:Disconnect()
 		end
 	end)
+
 	local data = {
 		visualPart = visualPart,
 		visualConnection = visualConnection,
 		heartbeatConnection = nil
 	}
 	_G.BlockHitboxData[Killer] = data
-	local localChar = lp.Character
+
+	local localChar = LP.Character
 	if not localChar or not SurvivorsFolder or localChar.Parent ~= SurvivorsFolder then
 		task.delay(_G.HitboxDuration, function() ClearKillerBlockHitbox(Killer) end)
 		return
@@ -310,6 +459,14 @@ local function StartBlockDetection(Killer, queryHitbox)
 
 	local hitboxSize = _G.BaseHitboxSize * _G.HitboxScale
 	local startTime = tick()
+
+	local instantPart = Instance.new("Part")
+	instantPart.Size = hitboxSize
+	instantPart.CanCollide = false
+	instantPart.Anchored = true
+	instantPart.Transparency = 1
+	instantPart.Parent = Hitboxes
+
 	local heartbeatPart = Instance.new("Part")
 	heartbeatPart.Size = hitboxSize
 	heartbeatPart.CanCollide = false
@@ -318,20 +475,53 @@ local function StartBlockDetection(Killer, queryHitbox)
 	heartbeatPart.Parent = Hitboxes
 
 	OverlapParamsObj.FilterDescendantsInstances = { localQuery }
+	instantPart.CFrame = queryHitbox.CFrame * CFrame.new(0, 0, _G.HitboxOffset)
+	local instantHits = Workspace:GetPartsInPart(instantPart, OverlapParamsObj)
+	if #instantHits > 0 then
+		pressBlock()
+		instantPart:Destroy()
+		heartbeatPart:Destroy()
+		ClearKillerBlockHitbox(Killer)
+		return
+	end
 
 	local heartbeatConn
 	heartbeatConn = RunService.Heartbeat:Connect(function()
-		if not _G.AutoBlockEnabled or (tick() - startTime > _G.HitboxDuration) or not localChar.Parent or not queryHitbox or not queryHitbox.Parent then
+		if not _G.AutoBlockEnabled then
 			heartbeatConn:Disconnect()
+			instantPart:Destroy()
 			heartbeatPart:Destroy()
 			ClearKillerBlockHitbox(Killer)
 			return
 		end
-		heartbeatPart.CFrame = queryHitbox.CFrame * CFrame.new(0, _G.HitboxYOffset, _G.HitboxOffset)
+		if tick() - startTime > _G.HitboxDuration then
+			heartbeatConn:Disconnect()
+			instantPart:Destroy()
+			heartbeatPart:Destroy()
+			ClearKillerBlockHitbox(Killer)
+			return
+		end
+		if not localChar.Parent or not SurvivorsFolder or localChar.Parent ~= SurvivorsFolder then
+			heartbeatConn:Disconnect()
+			instantPart:Destroy()
+			heartbeatPart:Destroy()
+			ClearKillerBlockHitbox(Killer)
+			return
+		end
+		if not queryHitbox or not queryHitbox.Parent then
+			heartbeatConn:Disconnect()
+			instantPart:Destroy()
+			heartbeatPart:Destroy()
+			ClearKillerBlockHitbox(Killer)
+			return
+		end
+
+		heartbeatPart.CFrame = queryHitbox.CFrame * CFrame.new(0, 0, _G.HitboxOffset)
 		local hits = Workspace:GetPartsInPart(heartbeatPart, OverlapParamsObj)
 		if #hits > 0 then
 			pressBlock()
 			heartbeatConn:Disconnect()
+			instantPart:Destroy()
 			heartbeatPart:Destroy()
 			ClearKillerBlockHitbox(Killer)
 		end
@@ -339,62 +529,232 @@ local function StartBlockDetection(Killer, queryHitbox)
 	data.heartbeatConnection = heartbeatConn
 end
 
+local function StartDragDetection(Killer, queryHitbox)
+	ClearKillerDragHitbox(Killer)
+	local visualPart = CreateDragHitboxVisual()
+	UpdateDragHitboxPosition(visualPart, queryHitbox)
+	local updateConnection = RunService.Heartbeat:Connect(function()
+		if visualPart and visualPart.Parent and queryHitbox and queryHitbox.Parent then
+			UpdateDragHitboxPosition(visualPart, queryHitbox)
+		else
+			updateConnection:Disconnect()
+		end
+	end)
+	_G.DragHitboxData[Killer] = { part = visualPart, connection = updateConnection }
+	task.delay(_G.DragHitboxDuration, function() ClearKillerDragHitbox(Killer) end)
+
+	local localChar = LP.Character
+	if not localChar or not SurvivorsFolder or localChar.Parent ~= SurvivorsFolder then return end
+	local localQuery = localChar:FindFirstChild("QueryHitbox")
+	if not localQuery then return end
+
+	local dragHitboxSize = _G.BaseHitboxSize * _G.DragHitboxScale
+	task.spawn(function()
+		local startTime = tick()
+		while tick() - startTime < _G.DragHitboxDuration do
+			if not _G.DragEnabled then break end
+			if not localChar.Parent or not SurvivorsFolder or localChar.Parent ~= SurvivorsFolder then break end
+			if not queryHitbox or not queryHitbox.Parent then break end
+			OverlapParamsObj.FilterDescendantsInstances = { localQuery }
+			local part = Instance.new("Part")
+			part.Size = dragHitboxSize
+			part.CFrame = queryHitbox.CFrame * CFrame.new(0, 0, _G.DragHitboxOffset)
+			part.CanCollide = false
+			part.Anchored = true
+			part.Transparency = 1
+			part.Parent = Hitboxes
+			Debris:AddItem(part, 0.1)
+			local hits = Workspace:GetPartsInPart(part, OverlapParamsObj)
+			if #hits > 0 then
+				local myRoot = localChar:FindFirstChild("HumanoidRootPart")
+				local targetPos = (queryHitbox.CFrame * CFrame.new(0, 0, _G.HitboxOffset)).Position
+				if myRoot then
+					local stepTime = _G.DragHitboxDuration / 20
+					for i = 1, 20 do
+						if not myRoot.Parent then break end
+						myRoot.CFrame = myRoot.CFrame:Lerp(CFrame.new(targetPos) * myRoot.CFrame.Rotation, i / 20)
+						task.wait(stepTime)
+					end
+				end
+				break
+			end
+			task.wait(0.015)
+		end
+	end)
+end
+
 local function HandleKiller_Attribute(Killer)
 	if not Players:GetPlayerFromCharacter(Killer) then return end
-	local queryHitbox = Killer:FindFirstChild("QueryHitbox") or Killer:WaitForChild("QueryHitbox", 5)
+	local queryHitbox = Killer:FindFirstChild("QueryHitbox")
 	if not queryHitbox then return end
+	local blockLocked = false
+	local abilityConn, abilitiessConn
 
-	local abilityConn = Killer:GetAttributeChangedSignal("AbilityLastUsed"):Connect(function()
-		if not _G.AutoBlockEnabled then return end
-		StartBlockDetection(Killer, queryHitbox)
-	end)
+	local function doBlock()
+		if not _G.AutoBlockEnabled and not _G.DragEnabled then return end
+		if _G.AutoBlockEnabled then
+			StartBlockDetection(Killer, queryHitbox)
+		end
+		if _G.DragEnabled then
+			StartDragDetection(Killer, queryHitbox)
+		end
+	end
+
+	local function onAbilitiesUsed()
+		blockLocked = true
+	end
+
+	local function onAbilityLastUsed()
+		if not _G.AutoBlockEnabled and not _G.DragEnabled then return end
+		if blockLocked then
+			blockLocked = false
+		else
+			doBlock()
+		end
+	end
+
+	abilityConn = Killer:GetAttributeChangedSignal("AbilityLastUsed"):Connect(onAbilityLastUsed)
+	abilitiessConn = Killer:GetAttributeChangedSignal("AbilitiesUsed"):Connect(onAbilitiesUsed)
 
 	Killer.AncestryChanged:Connect(function()
 		if not Killer.Parent then
 			abilityConn:Disconnect()
+			abilitiessConn:Disconnect()
 			ClearKillerBlockHitbox(Killer)
+			ClearKillerDragHitbox(Killer)
 		end
 	end)
 
 	table.insert(_G.AutoBlockConnections, {
 		Disconnect = function()
 			abilityConn:Disconnect()
+			abilitiessConn:Disconnect()
 		end
 	})
 end
 
 local function EnableAutoBlock()
-	for _, con in ipairs(_G.AutoBlockConnections) do pcall(con.Disconnect, con) end
-	_G.AutoBlockConnections = {}
-	GetObjects()
-	if KillersFolder then
-		for _, killer in ipairs(KillersFolder:GetChildren()) do
-			HandleKiller_Attribute(killer)
+	if _G.AutoBlockEnabled or _G.DragEnabled then
+		for _, con in ipairs(_G.AutoBlockConnections) do
+			pcall(con.Disconnect, con)
 		end
-		local childCon = KillersFolder.ChildAdded:Connect(HandleKiller_Attribute)
-		table.insert(_G.AutoBlockConnections, { Disconnect = function() childCon:Disconnect() end })
+		_G.AutoBlockConnections = {}
+		GetObjects()
+		if KillersFolder then
+			for _, killer in ipairs(KillersFolder:GetChildren()) do
+				HandleKiller_Attribute(killer)
+			end
+			local childCon = KillersFolder.ChildAdded:Connect(HandleKiller_Attribute)
+			table.insert(_G.AutoBlockConnections, {
+				Disconnect = function() childCon:Disconnect() end
+			})
+		end
 	end
 end
 
 local function DisableAutoBlock()
-	for _, con in ipairs(_G.AutoBlockConnections) do pcall(con.Disconnect, con) end
-	_G.AutoBlockConnections = {}
-	for killer, data in pairs(_G.BlockHitboxData) do
-		if data.visualPart then data.visualPart:Destroy() end
-		if data.visualConnection then data.visualConnection:Disconnect() end
-		if data.heartbeatConnection then data.heartbeatConnection:Disconnect() end
+	if not _G.AutoBlockEnabled and not _G.DragEnabled then
+		for _, con in ipairs(_G.AutoBlockConnections) do
+			pcall(con.Disconnect, con)
+		end
+		_G.AutoBlockConnections = {}
+		for killer, data in pairs(_G.BlockHitboxData) do
+			if data.visualPart then data.visualPart:Destroy() end
+			if data.visualConnection then data.visualConnection:Disconnect() end
+			if data.heartbeatConnection then data.heartbeatConnection:Disconnect() end
+		end
+		for killer, data in pairs(_G.DragHitboxData) do
+			if data.part then data.part:Destroy() end
+			if data.connection then data.connection:Disconnect() end
+		end
+		_G.BlockHitboxData = {}
+		_G.DragHitboxData = {}
 	end
-	_G.BlockHitboxData = {}
 end
+
+-- ===== BACKSTAB & AUTO PUNCH LOOPS =====
+local function clickDaggerButton()
+	local gui = LP.PlayerGui:FindFirstChild("MainUI")
+	local btn = gui and gui:FindFirstChild("AbilityContainer") and gui.AbilityContainer:FindFirstChild("Dagger")
+	if not btn or btn.BackgroundTransparency == 0 then return end
+	for _, c in ipairs(getconnections(btn.MouseButton1Click) or {}) do
+		pcall(function() c:Fire() end)
+	end
+	pcall(function() btn:Activate() end)
+end
+
+local function isBehind(hrp, targetHRP)
+	if (hrp.Position - targetHRP.Position).Magnitude > stabRange then return false end
+	if stabMode == "Around" then return true end
+	local dir = -targetHRP.CFrame.LookVector
+	return (hrp.Position - targetHRP.Position):Dot(dir) > 0.5
+end
+
+RunService.Heartbeat:Connect(function()
+	if not stabEnabled then return end
+	if tick() - lastBackstabTime < BACKSTAB_COOLDOWN then return end
+
+	local char = LP.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	local kFolder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Killers")
+	if not kFolder then return end
+
+	for _, name in ipairs(killerNames) do
+		local killer = kFolder:FindFirstChild(name)
+		local kHRP = killer and killer:FindFirstChild("HumanoidRootPart")
+
+		if kHRP and isBehind(hrp, kHRP) then
+			lastBackstabTime = tick()
+			local start = tick()
+			local offset = kHRP.CFrame.LookVector * BACKSTAB_DISTANCE
+
+			clickDaggerButton()
+
+			local conn
+			conn = RunService.Heartbeat:Connect(function()
+				if tick() - start > BACKSTAB_HOLD_TIME or not killer.Parent then
+					conn:Disconnect()
+					return
+				end
+				hrp.CFrame = CFrame.new(kHRP.Position - offset, kHRP.Position)
+			end)
+			break
+		end
+	end
+end)
+
+task.spawn(function()
+	while task.wait(0.1) do
+		if _G.AutoPunchEnabled and LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") then
+			local myPos = LP.Character.HumanoidRootPart.Position
+			local targetFound = false
+			if KillersFolder then
+				for _, enemy in ipairs(KillersFolder:GetChildren()) do
+					local root = enemy:FindFirstChild("HumanoidRootPart")
+					local hum = enemy:FindFirstChildOfClass("Humanoid")
+					if root and hum and hum.Health > 0 then
+						if (root.Position - myPos).Magnitude <= 12 then
+							targetFound = true
+							break
+						end
+					end
+				end
+			end
+			if targetFound then pressPunch() end
+		end
+	end
+end)
 
 LoadConfig()
 
--- ===== GUI =====
+-- ===== GUI BUILD =====
 local gui = Instance.new("ScreenGui")
 gui.Name = "c00lgui"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.Parent = lp.PlayerGui
+gui.Parent = LP.PlayerGui
 
 local RED = Color3.fromRGB(255, 0, 0)
 local BG = Color3.fromRGB(0, 0, 0)
@@ -416,7 +776,7 @@ title.Size = UDim2.new(1, 0, 0, 28)
 title.BackgroundColor3 = BG
 title.BorderColor3 = RED
 title.BorderSizePixel = 2
-title.Text = "c00lgui v2.3"
+title.Text = "c00lgui v2.4"
 title.TextColor3 = TXT
 title.Font = Enum.Font.SourceSansBold
 title.TextSize = 18
@@ -477,7 +837,7 @@ closeBtn.Parent = main
 
 local function Btn(parent, text, y)
 	local b = Instance.new("TextButton")
-	b.Size = UDim2.new(1, -16, 0, 26)
+	b.Size = UDim2.new(1, -16, 0, 24)
 	b.Position = UDim2.new(0, 8, 0, y)
 	b.BackgroundColor3 = BG
 	b.BorderColor3 = RED
@@ -485,7 +845,7 @@ local function Btn(parent, text, y)
 	b.Text = text
 	b.TextColor3 = TXT
 	b.Font = Enum.Font.SourceSansBold
-	b.TextSize = 14
+	b.TextSize = 13
 	b.BackgroundTransparency = 1
 	b.TextTransparency = 1
 	b.Parent = parent
@@ -525,7 +885,7 @@ local function Box(parent, default, y)
 	return t
 end
 
--- PAGE 1 STAMINA
+-- PAGE 1: STAMINA
 local page1 = Instance.new("Frame")
 page1.Size = UDim2.new(1, 0, 1, 0)
 page1.BackgroundTransparency = 1
@@ -536,7 +896,7 @@ local speedBox = Box(page1, stamina.SprintSpeed, 28)
 local infButton = Btn(page1, "Inf Stamina " .. (infEnabled and "ON" or "OFF"), 60)
 local jumpButton = Btn(page1, "Jump " .. (jumpEnabled and "ON" or "OFF"), 94)
 
--- PAGE 2 ESP
+-- PAGE 2: ESP
 local page2 = Instance.new("Frame")
 page2.Size = UDim2.new(1, 0, 1, 0)
 page2.BackgroundTransparency = 1
@@ -547,21 +907,22 @@ local espButton = Btn(page2, "ESP " .. (espEnabled and "ON" or "OFF"), 28)
 local itemButton = Btn(page2, "Item ESP " .. (showItems and "ON" or "OFF"), 62)
 local genButton = Btn(page2, "Gen ESP " .. (showGen and "ON" or "OFF"), 96)
 
--- PAGE 3 MISC
+-- PAGE 3: MISC
 local page3 = Instance.new("Frame")
 page3.Size = UDim2.new(1, 0, 1, 0)
 page3.BackgroundTransparency = 1
 page3.Visible = false
 page3.Parent = content
-Lbl(page3, "MISC", 6)
-local keyButton = Btn(page3, "Hakari Key: " .. hakariKey.Name, 28)
-local solveButton = Btn(page3, "SOLVE", 62)
-local solveKeyBtn = Btn(page3, "Solve Key: " .. solveKey.Name, 96)
+Lbl(page3, "MISC", 4)
+local keyButton = Btn(page3, "Hakari Key: " .. hakariKey.Name, 22)
+local solveButton = Btn(page3, "SOLVE", 50)
+local solveKeyBtn = Btn(page3, "Solve Key: " .. solveKey.Name, 78)
+local voidrushBtn = Btn(page3, "Voidrush Control " .. (voidrushcontrol and "ON" or "OFF"), 106)
 
--- PAGE 4 BLOCK
+-- PAGE 4: BLOCK
 local page4 = Instance.new("ScrollingFrame")
-page4.Size = UDim2.new(1,0,1,0)
-page4.CanvasSize = UDim2.new(0,0,0,210)
+page4.Size = UDim2.new(1, 0, 1, 0)
+page4.CanvasSize = UDim2.new(0, 0, 0, 210)
 page4.ScrollBarThickness = 6
 page4.AutomaticCanvasSize = Enum.AutomaticSize.Y
 page4.BackgroundTransparency = 1
@@ -577,7 +938,19 @@ local offsetBox = Box(page4, _G.HitboxOffset, 116)
 local durationBox = Box(page4, _G.HitboxDuration, 142)
 local autoPunchBtn = Btn(page4, "Auto Punch " .. (_G.AutoPunchEnabled and "ON" or "OFF"), 174)
 
-local pages = { page1, page2, page3, page4 }
+-- PAGE 5: STAB
+local page5 = Instance.new("Frame")
+page5.Size = UDim2.new(1, 0, 1, 0)
+page5.BackgroundTransparency = 1
+page5.Visible = false
+page5.Parent = content
+Lbl(page5, "STAB", 6)
+local autoStabBtn = Btn(page5, "Auto Stab " .. (stabEnabled and "ON" or "OFF"), 28)
+local stabModeBtn = Btn(page5, "Mode: " .. stabMode, 62)
+Lbl(page5, "Stab Range:", 96)
+local stabRangeBox = Box(page5, stabRange, 116)
+
+local pages = { page1, page2, page3, page4, page5 }
 
 -- Fade-in animation
 task.delay(1, function()
@@ -620,7 +993,7 @@ end
 leftBtn.MouseButton1Click:Connect(PrevPage)
 rightBtn.MouseButton1Click:Connect(NextPage)
 
--- Collapsed
+-- Collapsed UI
 local mini = Instance.new("Frame")
 mini.Size = UDim2.new(0, 160, 0, 28)
 mini.Position = main.Position
@@ -635,7 +1008,7 @@ local miniTitle = Instance.new("TextLabel")
 miniTitle.Size = UDim2.new(1, -30, 1, 0)
 miniTitle.Position = UDim2.new(0, 6, 0, 0)
 miniTitle.BackgroundTransparency = 1
-miniTitle.Text = "c00lgui v2.3"
+miniTitle.Text = "c00lgui v2.4"
 miniTitle.TextColor3 = TXT
 miniTitle.Font = Enum.Font.SourceSansBold
 miniTitle.TextSize = 14
@@ -664,7 +1037,7 @@ end
 closeBtn.MouseButton1Click:Connect(ToggleGUI)
 miniOpen.MouseButton1Click:Connect(ToggleGUI)
 
--- ===== LOGIC =====
+-- ===== EVENT LISTENERS & CALLBACKS =====
 task.spawn(function()
 	while task.wait(0.1) do
 		if infEnabled then
@@ -672,7 +1045,7 @@ task.spawn(function()
 			stamina.StaminaLossDisabled = true
 		end
 		if jumpEnabled then
-			local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
+			local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
 			if hum then
 				hum.UseJumpPower = true
 				hum.JumpPower = 50
@@ -691,31 +1064,18 @@ speedBox.FocusLost:Connect(function()
 	end
 end)
 
-lp.CharacterAdded:Connect(function(char)
+LP.CharacterAdded:Connect(function(char)
 	local hum = char:WaitForChild("Humanoid", 5)
 	if not hum then return end
-
-	if jumpEnabled then
-		hum.UseJumpPower = true
-		hum.JumpPower = 50
-	end
-
-	if infEnabled then
-		stamina.StaminaLossDisabled = true
-		stamina.Stamina = stamina.MaxStamina
-	end
-
+	if jumpEnabled then hum.UseJumpPower = true hum.JumpPower = 50 end
+	if infEnabled then stamina.StaminaLossDisabled = true stamina.Stamina = stamina.MaxStamina end
 	stamina.SprintSpeed = tonumber(speedBox.Text) or stamina.SprintSpeed
-
-	if _G.AutoBlockEnabled then
-		task.defer(function()
-			task.wait(0.5)
-			EnableAutoBlock()
-		end)
+	if _G.AutoBlockEnabled or _G.DragEnabled then
+		task.defer(function() task.wait(0.5) EnableAutoBlock() end)
 	end
 end)
 
--- ESP
+-- ESP System
 local PlayersFolder = Workspace:WaitForChild("Players")
 local oldLighting = {
 	Ambient = Lighting.Ambient, OutdoorAmbient = Lighting.OutdoorAmbient,
@@ -762,9 +1122,7 @@ local cachedGens = {}
 local function RefreshGens()
 	cachedGens = {}
 	for _, g in ipairs(Workspace:GetDescendants()) do
-		if g.Name:lower():find("generator") then
-			table.insert(cachedGens, g)
-		end
+		if g.Name:lower():find("generator") then table.insert(cachedGens, g) end
 	end
 end
 RefreshGens()
@@ -814,9 +1172,9 @@ task.spawn(function()
 	end
 end)
 
--- Hakari
+-- Hakari Dance
 local function ToggleHakariDance(state)
-	local char = lp.Character
+	local char = LP.Character
 	if not char then return end
 	local humanoid = char:FindFirstChildOfClass("Humanoid")
 	local rootPart = char:FindFirstChild("HumanoidRootPart")
@@ -876,7 +1234,7 @@ local function ToggleHakariDance(state)
 	end
 end
 
--- Input
+-- Key Input
 UIS.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if waitingForKey then
@@ -897,27 +1255,19 @@ UIS.InputBegan:Connect(function(input, gp)
 		end
 		return
 	end
-	if input.KeyCode == Enum.KeyCode.K then
-		ToggleGUI()
-	elseif input.KeyCode == Enum.KeyCode.KeypadFour then
-		PrevPage()
-	elseif input.KeyCode == Enum.KeyCode.KeypadSix then
-		NextPage()
-	elseif input.KeyCode == hakariKey then
-		ToggleHakariDance(not hakariActive)
-	elseif input.KeyCode == solveKey then
-		SolveNow()
-	end
+	if input.KeyCode == Enum.KeyCode.K then ToggleGUI()
+	elseif input.KeyCode == Enum.KeyCode.KeypadFour then PrevPage()
+	elseif input.KeyCode == Enum.KeyCode.KeypadSix then NextPage()
+	elseif input.KeyCode == hakariKey then ToggleHakariDance(not hakariActive)
+	elseif input.KeyCode == solveKey then SolveNow() end
 end)
 
--- Drag
+-- Drag Logic
 local function MakeDrag(frame)
 	local drag, start, pos
 	frame.InputBegan:Connect(function(i)
 		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-			drag = true
-			start = i.Position
-			pos = frame.Position
+			drag = true start = i.Position pos = frame.Position
 			i.Changed:Connect(function()
 				if i.UserInputState == Enum.UserInputState.End then drag = false end
 			end)
@@ -944,11 +1294,8 @@ end)
 jumpButton.MouseButton1Click:Connect(function()
 	jumpEnabled = not jumpEnabled
 	jumpButton.Text = "Jump " .. (jumpEnabled and "ON" or "OFF")
-	local hum = lp.Character and lp.Character:FindFirstChildOfClass("Humanoid")
-	if hum then
-		hum.UseJumpPower = true
-		hum.JumpPower = jumpEnabled and 50 or 0
-	end
+	local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+	if hum then hum.UseJumpPower = true hum.JumpPower = jumpEnabled and 50 or 0 end
 	SaveConfig()
 end)
 
@@ -974,22 +1321,23 @@ genButton.MouseButton1Click:Connect(function()
 	SaveConfig()
 end)
 
-keyButton.MouseButton1Click:Connect(function()
-	waitingForKey = true
-	keyButton.Text = "Press any key..."
-end)
-
+keyButton.MouseButton1Click:Connect(function() waitingForKey = true keyButton.Text = "Press any key..." end)
 solveButton.MouseButton1Click:Connect(SolveNow)
+solveKeyBtn.MouseButton1Click:Connect(function() waitingForSolveKey = true solveKeyBtn.Text = "Press any key..." end)
 
-solveKeyBtn.MouseButton1Click:Connect(function()
-	waitingForSolveKey = true
-	solveKeyBtn.Text = "Press any key..."
+voidrushBtn.MouseButton1Click:Connect(function()
+	voidrushcontrol = not voidrushcontrol
+	if not voidrushcontrol then
+		stopOverride()
+	end
+	voidrushBtn.Text = "Voidrush Control " .. (voidrushcontrol and "ON" or "OFF")
+	SaveConfig()
 end)
 
 autoBlockBtn.MouseButton1Click:Connect(function()
 	_G.AutoBlockEnabled = not _G.AutoBlockEnabled
 	autoBlockBtn.Text = "Auto Block " .. (_G.AutoBlockEnabled and "ON" or "OFF")
-	if _G.AutoBlockEnabled then EnableAutoBlock() else DisableAutoBlock() end
+	if _G.AutoBlockEnabled or _G.DragEnabled then EnableAutoBlock() else DisableAutoBlock() end
 	SaveConfig()
 end)
 
@@ -1001,41 +1349,47 @@ end)
 
 scaleBox.FocusLost:Connect(function()
 	local n = tonumber(scaleBox.Text)
-	if n and n > 0 then
-		_G.HitboxScale = n
-		SaveConfig()
-	else
-		scaleBox.Text = tostring(_G.HitboxScale)
-	end
+	if n and n > 0 then _G.HitboxScale = n SaveConfig() else scaleBox.Text = tostring(_G.HitboxScale) end
 end)
 
 offsetBox.FocusLost:Connect(function()
 	local n = tonumber(offsetBox.Text)
-	if n then
-		_G.HitboxOffset = n
-		SaveConfig()
-	else
-		offsetBox.Text = tostring(_G.HitboxOffset)
-	end
+	if n then _G.HitboxOffset = n SaveConfig() else offsetBox.Text = tostring(_G.HitboxOffset) end
 end)
 
 durationBox.FocusLost:Connect(function()
 	local n = tonumber(durationBox.Text)
-	if n and n > 0 then
-		_G.HitboxDuration = n
-		SaveConfig()
-	else
-		durationBox.Text = tostring(_G.HitboxDuration)
-	end
+	if n and n > 0 then _G.HitboxDuration = n SaveConfig() else durationBox.Text = tostring(_G.HitboxDuration) end
 end)
 
 autoPunchBtn.MouseButton1Click:Connect(function()
-    _G.AutoPunchEnabled = not _G.AutoPunchEnabled
-    autoPunchBtn.Text = "Auto Punch " .. (_G.AutoPunchEnabled and "ON" or "OFF")
-    SaveConfig()
+	_G.AutoPunchEnabled = not _G.AutoPunchEnabled
+	autoPunchBtn.Text = "Auto Punch " .. (_G.AutoPunchEnabled and "ON" or "OFF")
+	SaveConfig()
+end)
+
+-- Page 5 Callbacks
+autoStabBtn.MouseButton1Click:Connect(function()
+	stabEnabled = not stabEnabled
+	autoStabBtn.Text = "Auto Stab " .. (stabEnabled and "ON" or "OFF")
+	SaveConfig()
+end)
+
+stabModeBtn.MouseButton1Click:Connect(function()
+	stabMode = (stabMode == "Behind" and "Around" or "Behind")
+	stabModeBtn.Text = "Mode: " .. stabMode
+	SaveConfig()
+end)
+
+stabRangeBox.FocusLost:Connect(function()
+	local n = tonumber(stabRangeBox.Text)
+	if n and n > 0 then
+		stabRange = n
+		SaveConfig()
+	else
+		stabRangeBox.Text = tostring(stabRange)
+	end
 end)
 
 if espEnabled then FullBright(true) end
-if _G.AutoBlockEnabled then
-	task.defer(EnableAutoBlock)
-end
+if _G.AutoBlockEnabled or _G.DragEnabled then task.defer(EnableAutoBlock) end
