@@ -50,7 +50,7 @@ local ESPSettings = {
 	azureVineESP = false,
 	killerColor = Color3.fromRGB(255, 100, 100),
 	survivorColor = Color3.fromRGB(100, 255, 100),
-	generatorColor = Color3.fromRGB(200, 100, 200),
+	generatorColor = Color3.fromRGB(255, 255, 0),
 	itemColor = Color3.fromRGB(200, 200, 0),
 	pizzaColor = Color3.fromRGB(200, 150, 0),
 	pizzaDeliveryColor = Color3.fromRGB(200, 100, 100),
@@ -978,8 +978,7 @@ Lbl(page1, "STAMINA", 6)
 local speedBox = Box(page1, stamina.SprintSpeed, 28)
 local infButton = Btn(page1, "Inf Stamina " .. (infEnabled and "ON" or "OFF"), 60)
 local jumpButton = Btn(page1, "Jump " .. (jumpEnabled and "ON" or "OFF"), 94)
-
--- PAGE 2: ESP (Dạng Kéo / ScrollingFrame)
+-- PAGE 2: ESP FIXED
 local page2 = Instance.new("ScrollingFrame")
 page2.Size = UDim2.new(1, 0, 1, 0)
 page2.CanvasSize = UDim2.new(0, 0, 0, 420)
@@ -990,7 +989,7 @@ page2.BorderSizePixel = 0
 page2.Parent = content
 page2.Visible = false
 
-Lbl(page2, "ADVANCED ESP SYSTEM", 2)
+Lbl(page2, "ESP ", 2)
 local killerESPBtn = Btn(page2, "Killer ESP " .. (ESPSettings.killerESP and "ON" or "OFF"), 20)
 local survivorESPBtn = Btn(page2, "Survivor ESP " .. (ESPSettings.playerESP and "ON" or "OFF"), 48)
 local genESPBtn = Btn(page2, "Generator ESP " .. (ESPSettings.generatorESP and "ON" or "OFF"), 76)
