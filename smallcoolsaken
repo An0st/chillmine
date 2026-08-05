@@ -254,6 +254,129 @@ local function SolveNow()
 	end
 end
 
+-- ===== NEW AIM PUNCH SYSTEM (ANIMATION TRIGGER) =====
+local aimPunchSettings = {
+	distance = 100,
+}
+
+local triggerModules = {}
+local triggerConnections = {}
+
+local function registerTriggerModule(name, enableFunc, disableFunc)
+	triggerModules[name] = { enabled = false, enable = enableFunc, disable = disableFunc }
+end
+
+local function toggleModule(name, state)
+	local mod = triggerModules[name]
+	if not mod then return end
+	if state and not mod.enabled then
+		mod.enable()
+		mod.enabled = true
+	elseif not state and mod.enabled then
+		mod.disable()
+		mod.enabled = false
+	end
+end
+
+local function getPlayingAnimationIds(humanoid)
+	local ids = {}
+	if humanoid then
+		for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+			if track.Animation and track.Animation.AnimationId then
+				local id = track.Animation.AnimationId:match("%d+")
+				if id then ids[id] = true end
+			end
+		end
+	end
+	return ids
+end
+
+local function createAnimationTrigger(moduleName, animIds, targetType, useCamera)
+	local humanoid = nil
+	local hrp = nil
+	local isActive = false
+
+	local function getTarget()
+		local folder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild(targetType)
+		if not folder then return nil end
+		if not hrp then return nil end
+		local closest, closestDist = nil, math.huge
+		for _, model in ipairs(folder:GetChildren()) do
+			if model:IsA("Model") and model:FindFirstChild("HumanoidRootPart") and model ~= LP.Character then
+				local dist = (model.HumanoidRootPart.Position - hrp.Position).Magnitude
+				if dist < closestDist and dist <= aimPunchSettings.distance then
+					closestDist = dist
+					closest = model
+				end
+			end
+		end
+		return closest
+	end
+
+	local function onRenderStep()
+		if not isActive or not humanoid or not hrp then return end
+		local playing = getPlayingAnimationIds(humanoid)
+		local triggered = false
+		for id in pairs(animIds) do
+			if playing[id] then
+				triggered = true
+				break
+			end
+		end
+		if triggered then
+			local target = getTarget()
+			if target and target:FindFirstChild("HumanoidRootPart") then
+				if useCamera then
+					local targetPos = target.HumanoidRootPart.Position
+					local cam = Workspace.CurrentCamera
+					local direction = (targetPos - cam.CFrame.Position).Unit
+					cam.CFrame = CFrame.lookAt(cam.CFrame.Position, cam.CFrame.Position + direction)
+				else
+					local direction = (target.HumanoidRootPart.Position - hrp.Position).Unit
+					local yRot = math.atan2(-direction.X, -direction.Z)
+					hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, yRot, 0)
+				end
+			end
+		end
+	end
+
+	local function setupTriggerCharacter(char)
+		if char == LP.Character then
+			humanoid = char:WaitForChild("Humanoid")
+			hrp = char:WaitForChild("HumanoidRootPart")
+		end
+	end
+
+	local function enable()
+		isActive = true
+		if LP.Character then setupTriggerCharacter(LP.Character) end
+		LP.CharacterAdded:Connect(setupTriggerCharacter)
+		local conn = RunService.RenderStepped:Connect(onRenderStep)
+		table.insert(triggerConnections, conn)
+	end
+
+	local function disable()
+		isActive = false
+		humanoid = nil
+		hrp = nil
+	end
+
+	registerTriggerModule(moduleName, enable, disable)
+end
+
+createAnimationTrigger("Punch", {
+	["108911997126897"] = true,
+	["82137285150006"] = true,
+	["129843313690921"] = true,
+	["140703210927645"] = true,
+	["136007065400978"] = true,
+	["86096387000557"] = true,
+	["87259391926321"] = true,
+	["86709774283672"] = true,
+	["108807732150251"] = true,
+	["138040001965654"] = true
+}, "Killers", false)
+
 -- ===== GLOBAL AUTO BLOCK CONFIGS =====
 _G.BaseHitboxSize = Vector3.new(4.5, 6, 7.5)
 _G.HitboxScale = 1.0
@@ -276,7 +399,7 @@ _G.DragHitboxTransparency = 0.5
 _G.BlockHitboxData = {}
 _G.DragHitboxData = {}
 _G.AutoPunchEnabled = false
-_G.AutoPunchAimEnabled = false
+_G.AimPunchEnabled = false
 
 -- ===== STATES =====
 local infEnabled, jumpEnabled = false, false
@@ -302,7 +425,7 @@ local function SaveConfig()
 			hitboxOffset = _G.HitboxOffset,
 			hitboxDuration = _G.HitboxDuration,
 			autoPunch = _G.AutoPunchEnabled,
-			autoPunchAim = _G.AutoPunchAimEnabled,
+			aimPunch = _G.AimPunchEnabled,
 			stabEnabled = stabEnabled,
 			stabRange = stabRange,
 			stabMode = stabMode,
@@ -333,7 +456,10 @@ local function LoadConfig()
 		if data.hitboxOffset then _G.HitboxOffset = data.hitboxOffset end
 		if data.hitboxDuration then _G.HitboxDuration = data.hitboxDuration end
 		if data.autoPunch ~= nil then _G.AutoPunchEnabled = data.autoPunch end
-		if data.autoPunchAim ~= nil then _G.AutoPunchAimEnabled = data.autoPunchAim end
+		if data.aimPunch ~= nil then 
+			_G.AimPunchEnabled = data.aimPunch 
+			toggleModule("Punch", _G.AimPunchEnabled)
+		end
 		if data.stabEnabled ~= nil then stabEnabled = data.stabEnabled end
 		if data.stabRange ~= nil then stabRange = data.stabRange end
 		if data.stabMode ~= nil then stabMode = data.stabMode end
@@ -800,36 +926,40 @@ local function isBehind(hrp, targetHRP)
 	return (hrp.Position - targetHRP.Position):Dot(dir) > 0.5
 end
 
--- Vòng lặp tự động đấm (Auto Punch)
+-- Vòng lặp tự động đấm MỚI (Chỉ đấm khi Killer trong bán kính <= 10 studs)
 task.spawn(function()
 	while true do
 		task.wait(0.1)
 		if _G.AutoPunchEnabled then
 			pcall(function()
-				local tool = LP.Character and LP.Character:FindFirstChildOfClass("Tool")
-				if tool then
-					tool:Activate()
-				else
-					pressPunch()
+				local char = LP.Character
+				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+				local kFolder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Killers")
+				
+				if hrp and kFolder then
+					local killerInRange = false
+					for _, killer in ipairs(kFolder:GetChildren()) do
+						if killer:IsA("Model") and killer:FindFirstChild("HumanoidRootPart") then
+							local kHRP = killer.HumanoidRootPart
+							local dist = (kHRP.Position - hrp.Position).Magnitude
+							if dist <= 10 then
+								killerInRange = true
+								break
+							end
+						end
+					end
+					
+					if killerInRange then
+						local tool = char:FindFirstChildOfClass("Tool")
+						if tool then
+							tool:Activate()
+						else
+							pressPunch()
+						end
+					end
 				end
 			end)
 		end
-	end
-end)
-
--- Vòng lặp đấm theo hướng nhắm (Auto Punch Aim)
-RunService.RenderStepped:Connect(function()
-	if _G.AutoPunchAimEnabled then
-		pcall(function()
-			local char = LP.Character
-			local hrp = char and char:FindFirstChild("HumanoidRootPart")
-			local camera = Workspace.CurrentCamera
-			if hrp and camera then
-				local lookVector = camera.CFrame.LookVector
-				local targetCFrame = CFrame.new(hrp.Position, hrp.Position + Vector3.new(lookVector.X, 0, lookVector.Z))
-				hrp.CFrame = hrp.CFrame:Lerp(targetCFrame, 0.2)
-			end
-		end)
 	end
 end)
 
@@ -1050,7 +1180,7 @@ local solveButton = Btn(page3, "SOLVE", 50)
 local solveKeyBtn = Btn(page3, "Solve Key: " .. solveKey.Name, 78)
 local voidrushBtn = Btn(page3, "Voidrush Control " .. (voidrushcontrol and "ON" or "OFF"), 106)
 
--- PAGE 4: BLOCK
+-- PAGE 4: BLOCK & PUNCH
 local page4 = Instance.new("ScrollingFrame")
 page4.Size = UDim2.new(1, 0, 1, 0)
 page4.CanvasSize = UDim2.new(0, 0, 0, 240)
@@ -1060,15 +1190,15 @@ page4.BackgroundTransparency = 1
 page4.BorderSizePixel = 0
 page4.Parent = content
 page4.Visible = false
-Lbl(page4, "BLOCK", 2)
+Lbl(page4, "BLOCK & PUNCH", 2)
 local autoBlockBtn = Btn(page4, "Auto Block " .. (_G.AutoBlockEnabled and "ON" or "OFF"), 18)
 local showHitboxBtn = Btn(page4, "Show Hitbox " .. (_G.ShowHitboxVisual and "ON" or "OFF"), 46)
 Lbl(page4, "Scale | Offset Z | Duration", 74)
 local scaleBox = Box(page4, _G.HitboxScale, 90)
 local offsetBox = Box(page4, _G.HitboxOffset, 116)
 local durationBox = Box(page4, _G.HitboxDuration, 142)
-local autoPunchBtn = Btn(page4, "Auto Punch " .. (_G.AutoPunchEnabled and "ON" or "OFF"), 174)
-local autoPunchAimBtn = Btn(page4, "AutoPunch Aim " .. (_G.AutoPunchAimEnabled and "ON" or "OFF"), 202)
+local autoPunchBtn = Btn(page4, "Auto Punch (<=10s) " .. (_G.AutoPunchEnabled and "ON" or "OFF"), 174)
+local aimPunchBtn = Btn(page4, "Aim Punch " .. (_G.AimPunchEnabled and "ON" or "OFF"), 202)
 
 -- PAGE 5: STAB
 local page5 = Instance.new("Frame")
@@ -1454,13 +1584,14 @@ end)
 
 autoPunchBtn.MouseButton1Click:Connect(function()
 	_G.AutoPunchEnabled = not _G.AutoPunchEnabled
-	autoPunchBtn.Text = "Auto Punch " .. (_G.AutoPunchEnabled and "ON" or "OFF")
+	autoPunchBtn.Text = "Auto Punch (<=10s) " .. (_G.AutoPunchEnabled and "ON" or "OFF")
 	SaveConfig()
 end)
 
-autoPunchAimBtn.MouseButton1Click:Connect(function()
-	_G.AutoPunchAimEnabled = not _G.AutoPunchAimEnabled
-	autoPunchAimBtn.Text = "AutoPunch Aim " .. (_G.AutoPunchAimEnabled and "ON" or "OFF")
+aimPunchBtn.MouseButton1Click:Connect(function()
+	_G.AimPunchEnabled = not _G.AimPunchEnabled
+	aimPunchBtn.Text = "Aim Punch " .. (_G.AimPunchEnabled and "ON" or "OFF")
+	toggleModule("Punch", _G.AimPunchEnabled)
 	SaveConfig()
 end)
 
