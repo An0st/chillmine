@@ -1,3 +1,4 @@
+```lua
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
@@ -9,7 +10,6 @@ local HttpService = game:GetService("HttpService")
 local Debris = game:GetService("Debris")
 local LP = Players.LocalPlayer
 
--- ===== STAMINA MODIFICATIONS =====
 local Sprinting = ReplicatedStorage:WaitForChild("Systems"):WaitForChild("Character"):WaitForChild("Game"):WaitForChild("Sprinting")
 local stamina = require(Sprinting)
 stamina.MaxStamina = 100
@@ -21,7 +21,6 @@ stamina.StaminaLossDisabled = true
 
 local CONFIG_FILE = "c00lgui_v24_config.json"
 
--- ===== ADVANCED ESP SETTINGS & DATA =====
 local MapFolder = nil
 local mapObj = Workspace:FindFirstChild("Map")
 if mapObj then MapFolder = mapObj:FindFirstChild("Ingame") end
@@ -67,7 +66,6 @@ local ESPSettings = {
 	survivorOutlineTransparency = 0.3,
 }
 
--- ===== BACKSTAB SETTINGS & KILLERS LIST =====
 local stabEnabled = false
 local stabRange = 8
 local stabMode = "Behind"
@@ -75,14 +73,13 @@ local BACKSTAB_DISTANCE = 1.8
 local BACKSTAB_HOLD_TIME = 0.35
 local BACKSTAB_COOLDOWN = 10
 local lastBackstabTime = 0
+local deleteFakeNoli = false
 
--- Danh sách Killer Names mở rộng phục vụ cho cả Aim System lẫn Auto Stab
 local killerNames = {
 	"Slasher", "Jason", "c00lkidd", "JohnDoe", "1x1x1x1", "Noli", "Nosferatu", "Sixer", "Azure",
 	"Guest 666", "Jane Doe", "Valkyrie", "Corrupted", "Jeff The Killer"
 }
 
--- ===== VOIDRUSH CONTROLLER LOGIC =====
 local voidrushcontrol = false
 local ORIGINAL_DASH_SPEED = 55
 local isOverrideActive = false
@@ -131,7 +128,6 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
--- ===== FLOW SOLVE LOGIC =====
 local flow = { nodeDelay = 0.01 }
 local function flowKey(n) return n.row .. "-" .. n.col end
 local function flowNeighbour(r1, c1, r2, c2)
@@ -243,7 +239,6 @@ local function SolveNow()
 	end
 end
 
--- ===== AIM PUNCH SYSTEM (FIXED & REFRESHED) =====
 local aimPunchSettings = { distance = 100 }
 local triggerModules = {}
 local triggerConnections = {}
@@ -298,15 +293,11 @@ local function createAnimationTrigger(moduleName, animIds, targetType, useCamera
 
 	local function onRenderStep()
 		if not isActive then return end
-
-		-- Live Check: Lấy nhân vật mới nhất ngay trên khung hình thực hiện
 		local char = LP.Character
 		if not char then return end
-
 		local humanoid = char:FindFirstChildOfClass("Humanoid")
 		local hrp = char:FindFirstChild("HumanoidRootPart")
 		if not humanoid or not hrp or humanoid.Health <= 0 then return end
-
 		local playing = getPlayingAnimationIds(humanoid)
 		local triggered = false
 		for id in pairs(animIds) do
@@ -315,7 +306,6 @@ local function createAnimationTrigger(moduleName, animIds, targetType, useCamera
 				break
 			end
 		end
-
 		if triggered then
 			local target = getTarget(hrp)
 			if target and target:FindFirstChild("HumanoidRootPart") then
@@ -363,7 +353,6 @@ createAnimationTrigger("Punch", {
 	["138040001965654"] = true
 }, "Killers", false)
 
--- ===== GLOBAL AUTO BLOCK CONFIGS =====
 _G.BaseHitboxSize = Vector3.new(4.5, 6, 7.5)
 _G.HitboxScale = 1.0
 _G.HitboxOffset = -1.4
@@ -387,7 +376,6 @@ _G.DragHitboxData = {}
 _G.AutoPunchEnabled = false
 _G.AimPunchEnabled = false
 
--- ===== STATES =====
 local infEnabled, jumpEnabled = false, false
 local hidden = false
 local currentPage, totalPages = 1, 5
@@ -416,6 +404,7 @@ local function SaveConfig()
 			stabRange = stabRange,
 			stabMode = stabMode,
 			voidrushcontrol = voidrushcontrol,
+			deleteFakeNoli = deleteFakeNoli,
 		}
 		writefile(CONFIG_FILE, HttpService:JSONEncode(data))
 	end)
@@ -440,18 +429,18 @@ local function LoadConfig()
 		if data.hitboxOffset then _G.HitboxOffset = data.hitboxOffset end
 		if data.hitboxDuration then _G.HitboxDuration = data.hitboxDuration end
 		if data.autoPunch ~= nil then _G.AutoPunchEnabled = data.autoPunch end
-		if data.aimPunch ~= nil then 
-			_G.AimPunchEnabled = data.aimPunch 
+		if data.aimPunch ~= nil then
+			_G.AimPunchEnabled = data.aimPunch
 			toggleModule("Punch", _G.AimPunchEnabled)
 		end
 		if data.stabEnabled ~= nil then stabEnabled = data.stabEnabled end
 		if data.stabRange ~= nil then stabRange = data.stabRange end
 		if data.stabMode ~= nil then stabMode = data.stabMode end
 		if data.voidrushcontrol ~= nil then voidrushcontrol = data.voidrushcontrol end
+		if data.deleteFakeNoli ~= nil then deleteFakeNoli = data.deleteFakeNoli end
 	end)
 end
 
--- ===== AUTO BLOCK & AUTO PUNCH LOGIC =====
 local MainUI, KillersFolder, SurvivorsFolder, Hitboxes
 
 local function GetObjects()
@@ -666,7 +655,6 @@ local function DisableAutoBlock()
 	_G.BlockHitboxData = {}
 end
 
--- ===== c00lSaken ESP LOGIC =====
 local function IsRagdoll(model)
 	local ragdolls = Workspace:FindFirstChild("Ragdolls")
 	return ragdolls and (model:IsDescendantOf(ragdolls) or model.Parent == ragdolls)
@@ -686,7 +674,7 @@ local function createPlayerESP(model, color, isKiller)
 	local hrp = model:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 	local highlight = Instance.new("Highlight")
-	highlight.Name = "c00lsaken_Highlight"
+	highlight.Name = "c00lSaken_Highlight"
 	highlight.Adornee = model
 	highlight.FillColor = color
 	highlight.OutlineColor = color
@@ -698,9 +686,8 @@ end
 
 local function removePlayerESP(model)
 	pcall(function()
-		if model:FindFirstChild("c00lsaken_Highlight") then
-			model.c00lsaken_Highlight:Destroy()
-		end
+		local h = model:FindFirstChild("c00lSaken_Highlight")
+		if h then h:Destroy() end
 	end)
 end
 
@@ -894,7 +881,22 @@ task.spawn(function()
 	end
 end)
 
--- ===== BACKSTAB & AUTO PUNCH LOOPS =====
+task.spawn(function()
+	while true do
+		task.wait(0.15)
+		if not deleteFakeNoli then continue end
+		pcall(function()
+			local killers = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Killers")
+			if not killers then return end
+			for _, model in pairs(killers:GetChildren()) do
+				if model:IsA("Model") and model:GetAttribute("IsFakeNoli") == true then
+					model:Destroy()
+				end
+			end
+		end)
+	end
+end)
+
 local function clickDaggerButton()
 	local gui = LP.PlayerGui:FindFirstChild("MainUI")
 	local btn = gui and gui:FindFirstChild("AbilityContainer") and gui.AbilityContainer:FindFirstChild("Dagger")
@@ -910,7 +912,6 @@ local function isBehind(hrp, targetHRP)
 	return (hrp.Position - targetHRP.Position):Dot(dir) > 0.5
 end
 
--- Loop AutoPunch
 task.spawn(function()
 	while true do
 		task.wait(0.1)
@@ -919,7 +920,6 @@ task.spawn(function()
 				local char = LP.Character
 				local hrp = char and char:FindFirstChild("HumanoidRootPart")
 				local kFolder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Killers")
-				
 				if hrp and kFolder then
 					local killerInRange = false
 					for _, killer in ipairs(kFolder:GetChildren()) do
@@ -932,7 +932,6 @@ task.spawn(function()
 							end
 						end
 					end
-					
 					if killerInRange then
 						local tool = char:FindFirstChildOfClass("Tool")
 						if tool then
@@ -977,9 +976,22 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
+task.spawn(function()
+	while true do
+		task.wait(1)
+		if not _G.AutoBlockEnabled then continue end
+		local pf = Workspace:FindFirstChild("Players")
+		local kf = pf and pf:FindFirstChild("Killers")
+		if kf and kf ~= KillersFolder then
+			KillersFolder = kf
+			DisableAutoBlock()
+			EnableAutoBlock()
+		end
+	end
+end)
+
 LoadConfig()
 
--- ===== GUI BUILD =====
 local gui = Instance.new("ScreenGui")
 gui.Name = "c00lgui"
 gui.ResetOnSpawn = false
@@ -1115,7 +1127,6 @@ local function Box(parent, default, y)
 	return t
 end
 
--- PAGE 1: STAMINA
 local page1 = Instance.new("Frame")
 page1.Size = UDim2.new(1, 0, 1, 0)
 page1.BackgroundTransparency = 1
@@ -1126,7 +1137,6 @@ local speedBox = Box(page1, stamina.SprintSpeed, 28)
 local infButton = Btn(page1, "Inf Stamina " .. (infEnabled and "ON" or "OFF"), 60)
 local jumpButton = Btn(page1, "Jump " .. (jumpEnabled and "ON" or "OFF"), 94)
 
--- PAGE 2: ESP FIXED
 local page2 = Instance.new("ScrollingFrame")
 page2.Size = UDim2.new(1, 0, 1, 0)
 page2.CanvasSize = UDim2.new(0, 0, 0, 420)
@@ -1152,7 +1162,6 @@ local graffitiESPBtn = Btn(page2, "Graffiti ESP " .. (ESPSettings.graffitiEsp an
 local groundBulbESPBtn = Btn(page2, "GroundBulb ESP " .. (ESPSettings.azureGroundBulbESP and "ON" or "OFF"), 328)
 local vineESPBtn = Btn(page2, "Vine ESP " .. (ESPSettings.azureVineESP and "ON" or "OFF"), 356)
 
--- PAGE 3: MISC
 local page3 = Instance.new("Frame")
 page3.Size = UDim2.new(1, 0, 1, 0)
 page3.BackgroundTransparency = 1
@@ -1163,8 +1172,8 @@ local keyButton = Btn(page3, "Hakari Key: " .. hakariKey.Name, 22)
 local solveButton = Btn(page3, "SOLVE", 50)
 local solveKeyBtn = Btn(page3, "Solve Key: " .. solveKey.Name, 78)
 local voidrushBtn = Btn(page3, "Voidrush Control " .. (voidrushcontrol and "ON" or "OFF"), 106)
+local deleteNoliBtn = Btn(page3, "Delete Fake Noli " .. (deleteFakeNoli and "ON" or "OFF"), 134)
 
--- PAGE 4: BLOCK & PUNCH
 local page4 = Instance.new("ScrollingFrame")
 page4.Size = UDim2.new(1, 0, 1, 0)
 page4.CanvasSize = UDim2.new(0, 0, 0, 240)
@@ -1184,7 +1193,6 @@ local durationBox = Box(page4, _G.HitboxDuration, 142)
 local autoPunchBtn = Btn(page4, "Auto Punch " .. (_G.AutoPunchEnabled and "ON" or "OFF"), 174)
 local aimPunchBtn = Btn(page4, "Aim Punch " .. (_G.AimPunchEnabled and "ON" or "OFF"), 202)
 
--- PAGE 5: STAB
 local page5 = Instance.new("Frame")
 page5.Size = UDim2.new(1, 0, 1, 0)
 page5.BackgroundTransparency = 1
@@ -1198,7 +1206,6 @@ local stabRangeBox = Box(page5, stabRange, 116)
 
 local pages = { page1, page2, page3, page4, page5 }
 
--- Fade-in animation
 task.delay(1, function()
 	local info = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	TweenService:Create(main, info, { BackgroundTransparency = 0 }):Play()
@@ -1239,7 +1246,6 @@ end
 leftBtn.MouseButton1Click:Connect(PrevPage)
 rightBtn.MouseButton1Click:Connect(NextPage)
 
--- Collapsed UI
 local mini = Instance.new("Frame")
 mini.Size = UDim2.new(0, 160, 0, 28)
 mini.Position = main.Position
@@ -1283,13 +1289,11 @@ end
 closeBtn.MouseButton1Click:Connect(ToggleGUI)
 miniOpen.MouseButton1Click:Connect(ToggleGUI)
 
--- ===== FULL AUTO REFRESH SYSTEM ON CHARACTER RESPAWN =====
 local function onCharacterAdded(newChar)
 	local hum = newChar:WaitForChild("Humanoid", 10)
 	local hrp = newChar:WaitForChild("HumanoidRootPart", 10)
 	if not hum or not hrp then return end
 
-	-- Refresh Stamina, Jump & Speed
 	task.defer(function()
 		if infEnabled then
 			stamina.StaminaLossDisabled = true
@@ -1305,22 +1309,21 @@ local function onCharacterAdded(newChar)
 		end
 	end)
 
-	-- Refresh Auto Block Connections
 	if _G.AutoBlockEnabled then
 		task.defer(function()
-			task.wait(0.5)
+			task.wait(0.8)
+			DisableAutoBlock()
+			GetObjects()
 			EnableAutoBlock()
 		end)
 	end
 
-	-- Full Refresh Aim Punch System (Khởi động lại Connection để chắc chắn nhận nhân vật mới)
 	if _G.AimPunchEnabled then
 		toggleModule("Punch", false)
 		task.wait(0.1)
 		toggleModule("Punch", true)
 	end
 
-	-- Reset Voidrush state khi respawn
 	if voidrushcontrol then
 		stopOverride()
 	end
@@ -1331,7 +1334,6 @@ if LP.Character then
 end
 LP.CharacterAdded:Connect(onCharacterAdded)
 
--- ===== EVENT LISTENERS & CALLBACKS =====
 task.spawn(function()
 	while task.wait(0.1) do
 		if infEnabled then
@@ -1358,7 +1360,6 @@ speedBox.FocusLost:Connect(function()
 	end
 end)
 
--- PAGE 2 ESP CALLBACKS
 killerESPBtn.MouseButton1Click:Connect(function()
 	ESPSettings.killerESP = not ESPSettings.killerESP
 	killerESPBtn.Text = "Killer ESP " .. (ESPSettings.killerESP and "ON" or "OFF")
@@ -1437,7 +1438,6 @@ vineESPBtn.MouseButton1Click:Connect(function()
 	SaveConfig()
 end)
 
--- Hakari Dance
 local function ToggleHakariDance(state)
 	local char = LP.Character
 	if not char then return end
@@ -1499,7 +1499,6 @@ local function ToggleHakariDance(state)
 	end
 end
 
--- Key Input
 UIS.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if waitingForKey then
@@ -1527,7 +1526,6 @@ UIS.InputBegan:Connect(function(input, gp)
 	elseif input.KeyCode == solveKey then SolveNow() end
 end)
 
--- Drag Logic
 local function MakeDrag(frame)
 	local drag, start, pos
 	frame.InputBegan:Connect(function(i)
@@ -1548,7 +1546,6 @@ end
 MakeDrag(main)
 MakeDrag(mini)
 
--- Callbacks Khác
 infButton.MouseButton1Click:Connect(function()
 	infEnabled = not infEnabled
 	stamina.StaminaLossDisabled = infEnabled
@@ -1572,6 +1569,12 @@ voidrushBtn.MouseButton1Click:Connect(function()
 	voidrushcontrol = not voidrushcontrol
 	if not voidrushcontrol then stopOverride() end
 	voidrushBtn.Text = "Voidrush Control " .. (voidrushcontrol and "ON" or "OFF")
+	SaveConfig()
+end)
+
+deleteNoliBtn.MouseButton1Click:Connect(function()
+	deleteFakeNoli = not deleteFakeNoli
+	deleteNoliBtn.Text = "Delete Fake Noli " .. (deleteFakeNoli and "ON" or "OFF")
 	SaveConfig()
 end)
 
@@ -1634,3 +1637,4 @@ stabRangeBox.FocusLost:Connect(function()
 end)
 
 if _G.AutoBlockEnabled then task.defer(EnableAutoBlock) end
+```
