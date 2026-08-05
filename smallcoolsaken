@@ -67,7 +67,7 @@ local ESPSettings = {
 	survivorOutlineTransparency = 0.3,
 }
 
--- ===== BACKSTAB SETTINGS =====
+-- ===== BACKSTAB SETTINGS & KILLERS LIST =====
 local stabEnabled = false
 local stabRange = 8
 local stabMode = "Behind"
@@ -76,8 +76,10 @@ local BACKSTAB_HOLD_TIME = 0.35
 local BACKSTAB_COOLDOWN = 10
 local lastBackstabTime = 0
 
+-- Danh sách Killer Names mở rộng phục vụ cho cả Aim System lẫn Auto Stab
 local killerNames = {
-	"Slasher", "Jason", "c00lkidd", "JohnDoe", "1x1x1x1", "Noli", "Nosferatu", "Sixer", "Azure"
+	"Slasher", "Jason", "c00lkidd", "JohnDoe", "1x1x1x1", "Noli", "Nosferatu", "Sixer", "Azure",
+	"Guest 666", "Jane Doe", "Valkyrie", "Corrupted", "Jeff The Killer"
 }
 
 -- ===== VOIDRUSH CONTROLLER LOGIC =====
@@ -90,8 +92,8 @@ local function startOverride()
 	if isOverrideActive then return end
 	isOverrideActive = true
 	voidrushConnection = RunService.RenderStepped:Connect(function()
-		local humanoid = _G.Humanoid
-		local rootPart = _G.HumanoidRootPart
+		local humanoid = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+		local rootPart = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
 		if not humanoid or not rootPart then return end
 		humanoid.WalkSpeed = ORIGINAL_DASH_SPEED
 		humanoid.AutoRotate = false
@@ -106,7 +108,7 @@ end
 local function stopOverride()
 	if not isOverrideActive then return end
 	isOverrideActive = false
-	local humanoid = _G.Humanoid
+	local humanoid = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		humanoid.WalkSpeed = 18
 		humanoid.AutoRotate = true
@@ -120,7 +122,7 @@ end
 
 RunService.RenderStepped:Connect(function()
 	if not voidrushcontrol then return end
-	local char = _G.Humanoid and _G.Humanoid.Parent
+	local char = LP.Character
 	local voidRushState = char and char:GetAttribute("VoidRushState")
 	if voidRushState == "Dashing" then
 		startOverride()
@@ -241,7 +243,7 @@ local function SolveNow()
 	end
 end
 
--- ===== AIM PUNCH SYSTEM =====
+-- ===== AIM PUNCH SYSTEM (FIXED & REFRESHED) =====
 local aimPunchSettings = { distance = 100 }
 local triggerModules = {}
 local triggerConnections = {}
@@ -275,14 +277,10 @@ local function getPlayingAnimationIds(humanoid)
 	return ids
 end
 
-local setupTriggerCharacterRef = nil
-
 local function createAnimationTrigger(moduleName, animIds, targetType, useCamera)
-	local humanoid = nil
-	local hrp = nil
 	local isActive = false
 
-	local function getTarget()
+	local function getTarget(hrp)
 		local folder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild(targetType)
 		if not folder or not hrp then return nil end
 		local closest, closestDist = nil, math.huge
@@ -299,7 +297,16 @@ local function createAnimationTrigger(moduleName, animIds, targetType, useCamera
 	end
 
 	local function onRenderStep()
-		if not isActive or not humanoid or not hrp then return end
+		if not isActive then return end
+
+		-- Live Check: Lấy nhân vật mới nhất ngay trên khung hình thực hiện
+		local char = LP.Character
+		if not char then return end
+
+		local humanoid = char:FindFirstChildOfClass("Humanoid")
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		if not humanoid or not hrp or humanoid.Health <= 0 then return end
+
 		local playing = getPlayingAnimationIds(humanoid)
 		local triggered = false
 		for id in pairs(animIds) do
@@ -308,8 +315,9 @@ local function createAnimationTrigger(moduleName, animIds, targetType, useCamera
 				break
 			end
 		end
+
 		if triggered then
-			local target = getTarget()
+			local target = getTarget(hrp)
 			if target and target:FindFirstChild("HumanoidRootPart") then
 				if useCamera then
 					local targetPos = target.HumanoidRootPart.Position
@@ -325,24 +333,18 @@ local function createAnimationTrigger(moduleName, animIds, targetType, useCamera
 		end
 	end
 
-	setupTriggerCharacterRef = function(char)
-		if char == LP.Character then
-			humanoid = char:WaitForChild("Humanoid")
-			hrp = char:WaitForChild("HumanoidRootPart")
-		end
-	end
-
 	local function enable()
 		isActive = true
-		if LP.Character then setupTriggerCharacterRef(LP.Character) end
 		local conn = RunService.RenderStepped:Connect(onRenderStep)
 		table.insert(triggerConnections, conn)
 	end
 
 	local function disable()
 		isActive = false
-		humanoid = nil
-		hrp = nil
+		for i = #triggerConnections, 1, -1 do
+			triggerConnections[i]:Disconnect()
+			table.remove(triggerConnections, i)
+		end
 	end
 
 	registerTriggerModule(moduleName, enable, disable)
@@ -664,7 +666,7 @@ local function DisableAutoBlock()
 	_G.BlockHitboxData = {}
 end
 
--- ===== DETAILED ADVANCED ESP LOGIC =====
+-- ===== c00lSaken ESP LOGIC =====
 local function IsRagdoll(model)
 	local ragdolls = Workspace:FindFirstChild("Ragdolls")
 	return ragdolls and (model:IsDescendantOf(ragdolls) or model.Parent == ragdolls)
@@ -679,12 +681,12 @@ local function IsSpectating(player)
 end
 
 local function createPlayerESP(model, color, isKiller)
-	if model:FindFirstChild("Fixsaken_Highlight") then return end
+	if model:FindFirstChild("c00lSaken_Highlight") then return end
 	if IsRagdoll(model) then return end
 	local hrp = model:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 	local highlight = Instance.new("Highlight")
-	highlight.Name = "Fixsaken_Highlight"
+	highlight.Name = "c00lsaken_Highlight"
 	highlight.Adornee = model
 	highlight.FillColor = color
 	highlight.OutlineColor = color
@@ -696,8 +698,8 @@ end
 
 local function removePlayerESP(model)
 	pcall(function()
-		if model:FindFirstChild("Fixsaken_Highlight") then
-			model.Fixsaken_Highlight:Destroy()
+		if model:FindFirstChild("c00lsaken_Highlight") then
+			model.c00lsaken_Highlight:Destroy()
 		end
 	end)
 end
@@ -738,7 +740,7 @@ local function UpdateESP()
 				local player = Players:GetPlayerFromCharacter(killer)
 				if not player or IsSpectating(player) then removePlayerESP(killer) continue end
 				if ESPSettings.killerESP then
-					if not killer:FindFirstChild("Fixsaken_Highlight") then
+					if not killer:FindFirstChild("c00lSaken_Highlight") then
 						createPlayerESP(killer, ESPSettings.killerColor, true)
 					end
 				else
@@ -753,7 +755,7 @@ local function UpdateESP()
 				local player = Players:GetPlayerFromCharacter(survivor)
 				if not player or IsSpectating(player) then removePlayerESP(survivor) continue end
 				if ESPSettings.playerESP then
-					if not survivor:FindFirstChild("Fixsaken_Highlight") then
+					if not survivor:FindFirstChild("c00lSaken_Highlight") then
 						createPlayerESP(survivor, ESPSettings.survivorColor, false)
 					end
 				else
@@ -1281,21 +1283,13 @@ end
 closeBtn.MouseButton1Click:Connect(ToggleGUI)
 miniOpen.MouseButton1Click:Connect(ToggleGUI)
 
--- ===== AUTO REFRESH SYSTEM ON CHARACTER RESPAWN =====
+-- ===== FULL AUTO REFRESH SYSTEM ON CHARACTER RESPAWN =====
 local function onCharacterAdded(newChar)
 	local hum = newChar:WaitForChild("Humanoid", 10)
 	local hrp = newChar:WaitForChild("HumanoidRootPart", 10)
 	if not hum or not hrp then return end
 
-	_G.Humanoid = hum
-	_G.HumanoidRootPart = hrp
-
-	-- Cập nhật lại Aim Punch character reference
-	if setupTriggerCharacterRef then
-		setupTriggerCharacterRef(newChar)
-	end
-
-	-- Refresh Stamina & Speed & Jump
+	-- Refresh Stamina, Jump & Speed
 	task.defer(function()
 		if infEnabled then
 			stamina.StaminaLossDisabled = true
@@ -1319,14 +1313,14 @@ local function onCharacterAdded(newChar)
 		end)
 	end
 
-	-- Refresh Aim Punch Module
+	-- Full Refresh Aim Punch System (Khởi động lại Connection để chắc chắn nhận nhân vật mới)
 	if _G.AimPunchEnabled then
 		toggleModule("Punch", false)
 		task.wait(0.1)
 		toggleModule("Punch", true)
 	end
 
-	-- Reset Hakari & Voidrush state khi respawn
+	-- Reset Voidrush state khi respawn
 	if voidrushcontrol then
 		stopOverride()
 	end
@@ -1611,7 +1605,7 @@ end)
 
 autoPunchBtn.MouseButton1Click:Connect(function()
 	_G.AutoPunchEnabled = not _G.AutoPunchEnabled
-	autoPunchBtn.Text = "Auto Punch (<=10s) " .. (_G.AutoPunchEnabled and "ON" or "OFF")
+	autoPunchBtn.Text = "Auto Punch " .. (_G.AutoPunchEnabled and "ON" or "OFF")
 	SaveConfig()
 end)
 
