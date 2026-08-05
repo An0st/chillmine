@@ -910,7 +910,7 @@ local function isBehind(hrp, targetHRP)
 	return (hrp.Position - targetHRP.Position):Dot(dir) > 0.5
 end
 
--- Vòng lặp tự động đấm (Khi Killer <= 10 studs)
+-- Loop AutoPunch
 task.spawn(function()
 	while true do
 		task.wait(0.1)
@@ -1181,7 +1181,7 @@ Lbl(page4, "Scale | Offset Z | Duration", 74)
 local scaleBox = Box(page4, _G.HitboxScale, 90)
 local offsetBox = Box(page4, _G.HitboxOffset, 116)
 local durationBox = Box(page4, _G.HitboxDuration, 142)
-local autoPunchBtn = Btn(page4, "Auto Punch (<=10s) " .. (_G.AutoPunchEnabled and "ON" or "OFF"), 174)
+local autoPunchBtn = Btn(page4, "Auto Punch " .. (_G.AutoPunchEnabled and "ON" or "OFF"), 174)
 local aimPunchBtn = Btn(page4, "Aim Punch " .. (_G.AimPunchEnabled and "ON" or "OFF"), 202)
 
 -- PAGE 5: STAB
