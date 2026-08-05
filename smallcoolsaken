@@ -7,6 +7,7 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local Debris = game:GetService("Debris")
+local StarterGui = game:GetService("StarterGui")
 local LP = Players.LocalPlayer
 
 local Sprinting = ReplicatedStorage:WaitForChild("Systems"):WaitForChild("Character"):WaitForChild("Game"):WaitForChild("Sprinting")
@@ -240,7 +241,6 @@ end
 
 local aimPunchSettings = { distance = 100 }
 local triggerModules = {}
-local triggerConnections = {}
 
 local function registerTriggerModule(name, enableFunc, disableFunc)
 	triggerModules[name] = { enabled = false, enable = enableFunc, disable = disableFunc }
@@ -258,88 +258,7 @@ local function toggleModule(name, state)
 	end
 end
 
-local function getPlayingAnimationIds(humanoid)
-	local ids = {}
-	if humanoid then
-		for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
-			if track.Animation and track.Animation.AnimationId then
-				local id = track.Animation.AnimationId:match("%d+")
-				if id then ids[id] = true end
-			end
-		end
-	end
-	return ids
-end
-
-local function createAnimationTrigger(moduleName, animIds, targetType, useCamera)
-	local isActive = false
-
-	local function getTarget(hrp)
-		local folder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild(targetType)
-		if not folder or not hrp then return nil end
-		local closest, closestDist = nil, math.huge
-		for _, model in ipairs(folder:GetChildren()) do
-			if model:IsA("Model") and model:FindFirstChild("HumanoidRootPart") and model ~= LP.Character then
-				local dist = (model.HumanoidRootPart.Position - hrp.Position).Magnitude
-				if dist < closestDist and dist <= aimPunchSettings.distance then
-					closestDist = dist
-					closest = model
-				end
-			end
-		end
-		return closest
-	end
-
-	local function onRenderStep()
-		if not isActive then return end
-		local char = LP.Character
-		if not char then return end
-		local humanoid = char:FindFirstChildOfClass("Humanoid")
-		local hrp = char:FindFirstChild("HumanoidRootPart")
-		if not humanoid or not hrp or humanoid.Health <= 0 then return end
-		local playing = getPlayingAnimationIds(humanoid)
-		local triggered = false
-		for id in pairs(animIds) do
-			if playing[id] then
-				triggered = true
-				break
-			end
-		end
-		if triggered then
-			local target = getTarget(hrp)
-			if target and target:FindFirstChild("HumanoidRootPart") then
-				if useCamera then
-					local targetPos = target.HumanoidRootPart.Position
-					local cam = Workspace.CurrentCamera
-					local direction = (targetPos - cam.CFrame.Position).Unit
-					cam.CFrame = CFrame.lookAt(cam.CFrame.Position, cam.CFrame.Position + direction)
-				else
-					local direction = (target.HumanoidRootPart.Position - hrp.Position).Unit
-					local yRot = math.atan2(-direction.X, -direction.Z)
-					hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, yRot, 0)
-				end
-			end
-		end
-	end
-
-	local function enable()
-		isActive = true
-		local conn = RunService.RenderStepped:Connect(onRenderStep)
-		table.insert(triggerConnections, conn)
-	end
-
-	local function disable()
-		isActive = false
-		for i = #triggerConnections, 1, -1 do
-			triggerConnections[i]:Disconnect()
-			table.remove(triggerConnections, i)
-		end
-	end
-
-	registerTriggerModule(moduleName, enable, disable)
-end
-
-createAnimationTrigger("Punch", {
+local PUNCH_ANIM_IDS = {
 	["108911997126897"] = true,
 	["82137285150006"] = true,
 	["129843313690921"] = true,
@@ -350,7 +269,104 @@ createAnimationTrigger("Punch", {
 	["86709774283672"] = true,
 	["108807732150251"] = true,
 	["138040001965654"] = true
-}, "Killers", false)
+}
+
+local PREDICT_TIME = 0.18
+local aimPunchConnection = nil
+local isAiming = false
+
+local function getClosestTarget(maxDist)
+	local char = LP.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return nil end
+
+	local kFolder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Killers")
+	if not kFolder then return nil end
+
+	local closest, closestDist = nil, maxDist
+	for _, model in ipairs(kFolder:GetChildren()) do
+		if model:IsA("Model") and model ~= char then
+			local targetHRP = model:FindFirstChild("HumanoidRootPart")
+			local targetHum = model:FindFirstChildOfClass("Humanoid")
+			if targetHRP and targetHum and targetHum.Health > 0 then
+				local dist = (targetHRP.Position - hrp.Position).Magnitude
+				if dist < closestDist then
+					closestDist = dist
+					closest = targetHRP
+				end
+			end
+		end
+	end
+	return closest
+end
+
+local function aimAtTargetWithPrediction(targetHRP, duration)
+	if isAiming then return end
+	isAiming = true
+
+	local char = LP.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not hrp or not hum then isAiming = false return end
+
+	local oldAutoRotate = hum.AutoRotate
+	hum.AutoRotate = false
+
+	local startTime = tick()
+	local connection
+	connection = RunService.RenderStepped:Connect(function()
+		local elapsed = tick() - startTime
+		if elapsed >= duration or not targetHRP or not targetHRP.Parent or not hrp.Parent then
+			hum.AutoRotate = oldAutoRotate
+			isAiming = false
+			connection:Disconnect()
+			return
+		end
+
+		local targetVelocity = targetHRP.AssemblyLinearVelocity
+		local horizontalVelocity = Vector3.new(targetVelocity.X, 0, targetVelocity.Z)
+		local predictedPos = targetHRP.Position + (horizontalVelocity * PREDICT_TIME)
+		local aimPosition = Vector3.new(predictedPos.X, hrp.Position.Y, predictedPos.Z)
+		local targetCFrame = CFrame.lookAt(hrp.Position, aimPosition)
+		
+		hrp.CFrame = hrp.CFrame:Lerp(targetCFrame, 0.45)
+	end)
+end
+
+local function setupAimPunchListener(character)
+	if aimPunchConnection then
+		aimPunchConnection:Disconnect()
+		aimPunchConnection = nil
+	end
+
+	local hum = character:WaitForChild("Humanoid", 5)
+	local animator = hum and hum:WaitForChild("Animator", 5)
+	if not animator then return end
+
+	aimPunchConnection = animator.AnimationPlayed:Connect(function(track)
+		if not _G.AimPunchEnabled then return end
+		
+		local animId = track.Animation and track.Animation.AnimationId:match("%d+")
+		if animId and PUNCH_ANIM_IDS[animId] then
+			local targetHRP = getClosestTarget(aimPunchSettings.distance or 15)
+			if targetHRP then
+				aimAtTargetWithPrediction(targetHRP, 0.25)
+			end
+		end
+	end)
+end
+
+registerTriggerModule("Punch", 
+	function()
+		if LP.Character then setupAimPunchListener(LP.Character) end
+	end, 
+	function()
+		if aimPunchConnection then
+			aimPunchConnection:Disconnect()
+			aimPunchConnection = nil
+		end
+	end
+)
 
 _G.BaseHitboxSize = Vector3.new(4.5, 6, 7.5)
 _G.HitboxScale = 1.0
@@ -377,9 +393,9 @@ _G.AimPunchEnabled = false
 
 local infEnabled, jumpEnabled = false, false
 local hidden = false
-local currentPage, totalPages = 1, 5
-local hakariKey, solveKey = Enum.KeyCode.B, Enum.KeyCode.H
-local waitingForKey, waitingForSolveKey = false, false
+local currentPage, totalPages = 1, 6
+local hakariKey, solveKey, toggleKey = Enum.KeyCode.B, Enum.KeyCode.H, Enum.KeyCode.K
+local waitingForKey, waitingForSolveKey, waitingForToggleKey = false, false, false
 local hakariActive = false
 
 local function SaveConfig()
@@ -391,6 +407,7 @@ local function SaveConfig()
 			sprintSpeed = stamina.SprintSpeed,
 			hakariKey = hakariKey.Name,
 			solveKey = solveKey.Name,
+			toggleKey = toggleKey.Name,
 			autoBlock = _G.AutoBlockEnabled,
 			dragEnabled = _G.DragEnabled,
 			showHitbox = _G.ShowHitboxVisual,
@@ -421,6 +438,7 @@ local function LoadConfig()
 		if data.sprintSpeed then stamina.SprintSpeed = data.sprintSpeed end
 		if data.hakariKey then pcall(function() hakariKey = Enum.KeyCode[data.hakariKey] end) end
 		if data.solveKey then pcall(function() solveKey = Enum.KeyCode[data.solveKey] end) end
+		if data.toggleKey then pcall(function() toggleKey = Enum.KeyCode[data.toggleKey] end) end
 		if data.autoBlock ~= nil then _G.AutoBlockEnabled = data.autoBlock end
 		if data.dragEnabled ~= nil then _G.DragEnabled = data.dragEnabled end
 		if data.showHitbox ~= nil then _G.ShowHitboxVisual = data.showHitbox end
@@ -874,14 +892,17 @@ local function UpdateESP()
 	end
 end
 
+local espLoopRunning = true
 task.spawn(function()
-	while task.wait(0.5) do
+	while espLoopRunning do
+		task.wait(0.5)
 		pcall(UpdateESP)
 	end
 end)
 
+local fakeNoliRunning = true
 task.spawn(function()
-	while true do
+	while fakeNoliRunning do
 		task.wait(0.15)
 		if not deleteFakeNoli then continue end
 		pcall(function()
@@ -911,8 +932,9 @@ local function isBehind(hrp, targetHRP)
 	return (hrp.Position - targetHRP.Position):Dot(dir) > 0.5
 end
 
+local autoPunchRunning = true
 task.spawn(function()
-	while true do
+	while autoPunchRunning do
 		task.wait(0.1)
 		if _G.AutoPunchEnabled then
 			pcall(function()
@@ -945,7 +967,8 @@ task.spawn(function()
 	end
 end)
 
-RunService.Heartbeat:Connect(function()
+local stabConnection
+stabConnection = RunService.Heartbeat:Connect(function()
 	if not stabEnabled then return end
 	if tick() - lastBackstabTime < BACKSTAB_COOLDOWN then return end
 	local char = LP.Character
@@ -975,8 +998,9 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
+local autoBlockMonitor = true
 task.spawn(function()
-	while true do
+	while autoBlockMonitor do
 		task.wait(1)
 		if not _G.AutoBlockEnabled then continue end
 		local pf = Workspace:FindFirstChild("Players")
@@ -1203,7 +1227,18 @@ local stabModeBtn = Btn(page5, "Mode: " .. stabMode, 62)
 Lbl(page5, "Stab Range:", 96)
 local stabRangeBox = Box(page5, stabRange, 116)
 
-local pages = { page1, page2, page3, page4, page5 }
+local page6 = Instance.new("Frame")
+page6.Size = UDim2.new(1, 0, 1, 0)
+page6.BackgroundTransparency = 1
+page6.Visible = false
+page6.Parent = content
+Lbl(page6, "DANGER ZONE", 6)
+local toggleKeyBtn = Btn(page6, "Toggle Key: " .. toggleKey.Name, 32)
+local destroyBtn = Btn(page6, "DESTROY GUI", 76)
+destroyBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+destroyBtn.BorderColor3 = Color3.fromRGB(255, 50, 50)
+
+local pages = { page1, page2, page3, page4, page5, page6 }
 
 task.delay(1, function()
 	local info = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -1278,15 +1313,136 @@ miniOpen.Font = Enum.Font.SourceSansBold
 miniOpen.TextSize = 16
 miniOpen.Parent = mini
 
-local function ToggleGUI()
+local confirmFrame = Instance.new("Frame")
+confirmFrame.Name = "ConfirmFrame"
+confirmFrame.Size = UDim2.new(0, 220, 0, 130)
+confirmFrame.Position = UDim2.new(0.5, -110, 0.5, -65)
+confirmFrame.BackgroundColor3 = BG
+confirmFrame.BorderColor3 = RED
+confirmFrame.BorderSizePixel = 2
+confirmFrame.Visible = false
+confirmFrame.ZIndex = 10
+confirmFrame.Active = true
+confirmFrame.Parent = gui
+
+local confirmLabel = Instance.new("TextLabel")
+confirmLabel.Size = UDim2.new(1, -16, 0, 50)
+confirmLabel.Position = UDim2.new(0, 8, 0, 8)
+confirmLabel.BackgroundTransparency = 1
+confirmLabel.Text = "Bạn có chắc chắn muốn DESTROY GUI?\nTất cả tính năng sẽ bị hủy hoàn toàn!"
+confirmLabel.TextColor3 = TXT
+confirmLabel.Font = Enum.Font.SourceSansBold
+confirmLabel.TextSize = 13
+confirmLabel.TextWrapped = true
+confirmLabel.ZIndex = 11
+confirmLabel.Parent = confirmFrame
+
+local confirmYes = Instance.new("TextButton")
+confirmYes.Size = UDim2.new(0.45, -6, 0, 28)
+confirmYes.Position = UDim2.new(0, 8, 1, -36)
+confirmYes.BackgroundColor3 = BG
+confirmYes.BorderColor3 = RED
+confirmYes.BorderSizePixel = 2
+confirmYes.Text = "YES"
+confirmYes.TextColor3 = Color3.fromRGB(255, 80, 80)
+confirmYes.Font = Enum.Font.SourceSansBold
+confirmYes.TextSize = 14
+confirmYes.ZIndex = 11
+confirmYes.Parent = confirmFrame
+
+local confirmCancel = Instance.new("TextButton")
+confirmCancel.Size = UDim2.new(0.45, -6, 0, 28)
+confirmCancel.Position = UDim2.new(0.55, 0, 1, -36)
+confirmCancel.BackgroundColor3 = BG
+confirmCancel.BorderColor3 = RED
+confirmCancel.BorderSizePixel = 2
+confirmCancel.Text = "CANCEL"
+confirmCancel.TextColor3 = TXT
+confirmCancel.Font = Enum.Font.SourceSansBold
+confirmCancel.TextSize = 14
+confirmCancel.ZIndex = 11
+confirmCancel.Parent = confirmFrame
+
+local function CleanUpAllFeatures()
+	infEnabled = false
+	stamina.StaminaLossDisabled = false
+	
+	for k in pairs(ESPSettings) do
+		if type(ESPSettings[k]) == "boolean" then ESPSettings[k] = false end
+	end
+	pcall(UpdateESP)
+	
+	_G.AutoBlockEnabled = false
+	DisableAutoBlock()
+	
+	_G.AutoPunchEnabled = false
+	_G.AimPunchEnabled = false
+	toggleModule("Punch", false)
+	
+	stabEnabled = false
+	if stabConnection then stabConnection:Disconnect() end
+	
+	voidrushcontrol = false
+	stopOverride()
+	
+	deleteFakeNoli = false
+	espLoopRunning = false
+	fakeNoliRunning = false
+	autoPunchRunning = false
+	autoBlockMonitor = false
+end
+
+confirmYes.MouseButton1Click:Connect(function()
+	CleanUpAllFeatures()
+	gui:Destroy()
+end)
+
+confirmCancel.MouseButton1Click:Connect(function()
+	confirmFrame.Visible = false
+end)
+
+destroyBtn.MouseButton1Click:Connect(function()
+	confirmFrame.Visible = true
+end)
+
+local isMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled
+
+local function ToggleGUI_PC()
+	hidden = not hidden
+	main.Visible = not hidden
+	mini.Visible = false
+	if hidden then
+		pcall(function()
+			StarterGui:SetCore("SendNotification", {
+				Title = "c00lgui v2.4",
+				Text = "Ấn phím [ " .. toggleKey.Name .. " ] để mở lại GUI!",
+				Duration = 4
+			})
+		end)
+	end
+end
+
+local function ToggleGUI_Mobile()
 	hidden = not hidden
 	main.Visible = not hidden
 	mini.Visible = hidden
-	if hidden then mini.Position = main.Position else main.Position = mini.Position end
+	if hidden then 
+		mini.Position = main.Position 
+	else 
+		main.Position = mini.Position 
+	end
 end
 
-closeBtn.MouseButton1Click:Connect(ToggleGUI)
-miniOpen.MouseButton1Click:Connect(ToggleGUI)
+local function OnCloseClicked()
+	if isMobile then
+		ToggleGUI_Mobile()
+	else
+		ToggleGUI_PC()
+	end
+end
+
+closeBtn.MouseButton1Click:Connect(OnCloseClicked)
+miniOpen.MouseButton1Click:Connect(ToggleGUI_Mobile)
 
 local function onCharacterAdded(newChar)
 	local hum = newChar:WaitForChild("Humanoid", 10)
@@ -1498,6 +1654,11 @@ local function ToggleHakariDance(state)
 	end
 end
 
+toggleKeyBtn.MouseButton1Click:Connect(function()
+	waitingForToggleKey = true
+	toggleKeyBtn.Text = "Press any key..."
+end)
+
 UIS.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if waitingForKey then
@@ -1518,7 +1679,21 @@ UIS.InputBegan:Connect(function(input, gp)
 		end
 		return
 	end
-	if input.KeyCode == Enum.KeyCode.K then ToggleGUI()
+	if waitingForToggleKey then
+		if input.UserInputType == Enum.UserInputType.Keyboard then
+			toggleKey = input.KeyCode
+			toggleKeyBtn.Text = "Toggle Key: " .. input.KeyCode.Name
+			waitingForToggleKey = false
+			SaveConfig()
+		end
+		return
+	end
+	if input.KeyCode == toggleKey then 
+		if isMobile then
+			ToggleGUI_Mobile()
+		else
+			ToggleGUI_PC()
+		end
 	elseif input.KeyCode == Enum.KeyCode.KeypadFour then PrevPage()
 	elseif input.KeyCode == Enum.KeyCode.KeypadSix then NextPage()
 	elseif input.KeyCode == hakariKey then ToggleHakariDance(not hakariActive)
@@ -1544,6 +1719,7 @@ local function MakeDrag(frame)
 end
 MakeDrag(main)
 MakeDrag(mini)
+MakeDrag(confirmFrame)
 
 infButton.MouseButton1Click:Connect(function()
 	infEnabled = not infEnabled
