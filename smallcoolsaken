@@ -86,19 +86,6 @@ local ORIGINAL_DASH_SPEED = 55
 local isOverrideActive = false
 local voidrushConnection
 
-local function setupCharacter(character)
-	if not character then return end
-	local Humanoid = character:FindFirstChild("Humanoid")
-	local HumanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-	if Humanoid and HumanoidRootPart then
-		_G.Humanoid = Humanoid
-		_G.HumanoidRootPart = HumanoidRootPart
-	end
-end
-
-if LP.Character then setupCharacter(LP.Character) end
-LP.CharacterAdded:Connect(setupCharacter)
-
 local function startOverride()
 	if isOverrideActive then return end
 	isOverrideActive = true
@@ -254,11 +241,8 @@ local function SolveNow()
 	end
 end
 
--- ===== NEW AIM PUNCH SYSTEM (ANIMATION TRIGGER) =====
-local aimPunchSettings = {
-	distance = 100,
-}
-
+-- ===== AIM PUNCH SYSTEM =====
+local aimPunchSettings = { distance = 100 }
 local triggerModules = {}
 local triggerConnections = {}
 
@@ -291,6 +275,8 @@ local function getPlayingAnimationIds(humanoid)
 	return ids
 end
 
+local setupTriggerCharacterRef = nil
+
 local function createAnimationTrigger(moduleName, animIds, targetType, useCamera)
 	local humanoid = nil
 	local hrp = nil
@@ -298,8 +284,7 @@ local function createAnimationTrigger(moduleName, animIds, targetType, useCamera
 
 	local function getTarget()
 		local folder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild(targetType)
-		if not folder then return nil end
-		if not hrp then return nil end
+		if not folder or not hrp then return nil end
 		local closest, closestDist = nil, math.huge
 		for _, model in ipairs(folder:GetChildren()) do
 			if model:IsA("Model") and model:FindFirstChild("HumanoidRootPart") and model ~= LP.Character then
@@ -340,7 +325,7 @@ local function createAnimationTrigger(moduleName, animIds, targetType, useCamera
 		end
 	end
 
-	local function setupTriggerCharacter(char)
+	setupTriggerCharacterRef = function(char)
 		if char == LP.Character then
 			humanoid = char:WaitForChild("Humanoid")
 			hrp = char:WaitForChild("HumanoidRootPart")
@@ -349,8 +334,7 @@ local function createAnimationTrigger(moduleName, animIds, targetType, useCamera
 
 	local function enable()
 		isActive = true
-		if LP.Character then setupTriggerCharacter(LP.Character) end
-		LP.CharacterAdded:Connect(setupTriggerCharacter)
+		if LP.Character then setupTriggerCharacterRef(LP.Character) end
 		local conn = RunService.RenderStepped:Connect(onRenderStep)
 		table.insert(triggerConnections, conn)
 	end
@@ -441,9 +425,7 @@ local function LoadConfig()
 		local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
 		if data.infEnabled ~= nil then infEnabled = data.infEnabled end
 		if data.espSettings then
-			for k, v in pairs(data.espSettings) do
-				ESPSettings[k] = v
-			end
+			for k, v in pairs(data.espSettings) do ESPSettings[k] = v end
 		end
 		if data.jumpEnabled ~= nil then jumpEnabled = data.jumpEnabled end
 		if data.sprintSpeed then stamina.SprintSpeed = data.sprintSpeed end
@@ -926,7 +908,7 @@ local function isBehind(hrp, targetHRP)
 	return (hrp.Position - targetHRP.Position):Dot(dir) > 0.5
 end
 
--- Vòng lặp tự động đấm MỚI (Chỉ đấm khi Killer trong bán kính <= 10 studs)
+-- Vòng lặp tự động đấm (Khi Killer <= 10 studs)
 task.spawn(function()
 	while true do
 		task.wait(0.1)
@@ -1299,6 +1281,62 @@ end
 closeBtn.MouseButton1Click:Connect(ToggleGUI)
 miniOpen.MouseButton1Click:Connect(ToggleGUI)
 
+-- ===== AUTO REFRESH SYSTEM ON CHARACTER RESPAWN =====
+local function onCharacterAdded(newChar)
+	local hum = newChar:WaitForChild("Humanoid", 10)
+	local hrp = newChar:WaitForChild("HumanoidRootPart", 10)
+	if not hum or not hrp then return end
+
+	_G.Humanoid = hum
+	_G.HumanoidRootPart = hrp
+
+	-- Cập nhật lại Aim Punch character reference
+	if setupTriggerCharacterRef then
+		setupTriggerCharacterRef(newChar)
+	end
+
+	-- Refresh Stamina & Speed & Jump
+	task.defer(function()
+		if infEnabled then
+			stamina.StaminaLossDisabled = true
+			stamina.Stamina = stamina.MaxStamina
+		end
+		if jumpEnabled then
+			hum.UseJumpPower = true
+			hum.JumpPower = 50
+		end
+		local speedVal = tonumber(speedBox.Text)
+		if speedVal then
+			stamina.SprintSpeed = speedVal
+		end
+	end)
+
+	-- Refresh Auto Block Connections
+	if _G.AutoBlockEnabled then
+		task.defer(function()
+			task.wait(0.5)
+			EnableAutoBlock()
+		end)
+	end
+
+	-- Refresh Aim Punch Module
+	if _G.AimPunchEnabled then
+		toggleModule("Punch", false)
+		task.wait(0.1)
+		toggleModule("Punch", true)
+	end
+
+	-- Reset Hakari & Voidrush state khi respawn
+	if voidrushcontrol then
+		stopOverride()
+	end
+end
+
+if LP.Character then
+	task.spawn(function() onCharacterAdded(LP.Character) end)
+end
+LP.CharacterAdded:Connect(onCharacterAdded)
+
 -- ===== EVENT LISTENERS & CALLBACKS =====
 task.spawn(function()
 	while task.wait(0.1) do
@@ -1323,17 +1361,6 @@ speedBox.FocusLost:Connect(function()
 		SaveConfig()
 	else
 		speedBox.Text = tostring(stamina.SprintSpeed)
-	end
-end)
-
-LP.CharacterAdded:Connect(function(char)
-	local hum = char:WaitForChild("Humanoid", 5)
-	if not hum then return end
-	if jumpEnabled then hum.UseJumpPower = true hum.JumpPower = 50 end
-	if infEnabled then stamina.StaminaLossDisabled = true stamina.Stamina = stamina.MaxStamina end
-	stamina.SprintSpeed = tonumber(speedBox.Text) or stamina.SprintSpeed
-	if _G.AutoBlockEnabled then
-		task.defer(function() task.wait(0.5) EnableAutoBlock() end)
 	end
 end)
 
