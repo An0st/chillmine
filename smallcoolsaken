@@ -21,6 +21,149 @@ stamina.StaminaLossDisabled = true
 
 local CONFIG_FILE = "c00lgui_v24_config.json"
 
+-- ===== DELETE FAKE NOLI SYSTEM =====
+local deleteFakeNoli = false
+
+task.spawn(function()
+	while true do
+		task.wait(0.2)
+		if not deleteFakeNoli then continue end
+		local killers = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild("Killers")
+		if killers then
+			for _, model in pairs(killers:GetChildren()) do
+				if model:IsA("Model") and model:GetAttribute("IsFakeNoli") == true then
+					model:Destroy()
+				end
+			end
+		end
+	end
+end)
+
+-- ===== AIM PUNCH SYSTEM =====
+local punchAimSettings = {
+	distance = 100,
+	smoothness = 20,
+	duration = 50
+}
+
+local punchModules = {}
+local triggerConnections = {}
+
+local function registerTriggerModule(name, enableFunc, disableFunc)
+	punchModules[name] = { enabled = false, enable = enableFunc, disable = disableFunc }
+end
+
+local function togglePunchModule(name, state)
+	local mod = punchModules[name]
+	if not mod then return end
+	if state and not mod.enabled then
+		mod.enable()
+		mod.enabled = true
+	elseif not state and mod.enabled then
+		mod.disable()
+		mod.enabled = false
+	end
+end
+
+local function getPlayingAnimationIds(humanoid)
+	local ids = {}
+	if humanoid then
+		for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+			if track.Animation and track.Animation.AnimationId then
+				local id = track.Animation.AnimationId:match("%d+")
+				if id then ids[id] = true end
+			end
+		end
+	end
+	return ids
+end
+
+local function createAnimationTrigger(moduleName, animIds, targetType, useCamera)
+	local humanoid = nil
+	local hrp = nil
+	local isActive = false
+
+	local function getTarget()
+		local folder = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild(targetType)
+		if not folder then return nil end
+		if not hrp then return nil end
+		local closest, closestDist = nil, math.huge
+		for _, model in ipairs(folder:GetChildren()) do
+			if model:IsA("Model") and model:FindFirstChild("HumanoidRootPart") and model ~= LP.Character then
+				local dist = (model.HumanoidRootPart.Position - hrp.Position).Magnitude
+				if dist < closestDist and dist <= punchAimSettings.distance then
+					closestDist = dist
+					closest = model
+				end
+			end
+		end
+		return closest
+	end
+
+	local function onRenderStep()
+		if not isActive or not humanoid or not hrp then return end
+		local playing = getPlayingAnimationIds(humanoid)
+		local triggered = false
+		for id in pairs(animIds) do
+			if playing[id] then
+				triggered = true
+				break
+			end
+		end
+		if triggered then
+			local target = getTarget()
+			if target and target:FindFirstChild("HumanoidRootPart") then
+				if useCamera then
+					local targetPos = target.HumanoidRootPart.Position
+					local cam = Workspace.CurrentCamera
+					local direction = (targetPos - cam.CFrame.Position).Unit
+					cam.CFrame = CFrame.lookAt(cam.CFrame.Position, cam.CFrame.Position + direction)
+				else
+					local direction = (target.HumanoidRootPart.Position - hrp.Position).Unit
+					local yRot = math.atan2(-direction.X, -direction.Z)
+					hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, yRot, 0)
+				end
+			end
+		end
+	end
+
+	local function setupChar(char)
+		if char == LP.Character then
+			humanoid = char:WaitForChild("Humanoid")
+			hrp = char:WaitForChild("HumanoidRootPart")
+		end
+	end
+
+	local function enable()
+		isActive = true
+		if LP.Character then setupChar(LP.Character) end
+		LP.CharacterAdded:Connect(setupChar)
+		local conn = RunService.RenderStepped:Connect(onRenderStep)
+		table.insert(triggerConnections, conn)
+	end
+
+	local function disable()
+		isActive = false
+		humanoid = nil
+		hrp = nil
+	end
+
+	registerTriggerModule(moduleName, enable, disable)
+end
+
+createAnimationTrigger("Punch", {
+	["108911997126897"] = true,
+	["82137285150006"] = true,
+	["129843313690921"] = true,
+	["140703210927645"] = true,
+	["136007065400978"] = true,
+	["86096387000557"] = true,
+	["87259391926321"] = true,
+	["86709774283672"] = true,
+	["108807732150251"] = true,
+	["138040001965654"] = true
+}, "Killers", false)
+
 -- ===== ADVANCED ESP SETTINGS & DATA =====
 local MapFolder = nil
 local mapObj = Workspace:FindFirstChild("Map")
@@ -276,7 +419,7 @@ _G.DragHitboxTransparency = 0.5
 _G.BlockHitboxData = {}
 _G.DragHitboxData = {}
 _G.AutoPunchEnabled = false
-_G.AutoPunchAimEnabled = false
+_G.PunchAimEnabled = false
 
 -- ===== STATES =====
 local infEnabled, jumpEnabled = false, false
@@ -302,7 +445,8 @@ local function SaveConfig()
 			hitboxOffset = _G.HitboxOffset,
 			hitboxDuration = _G.HitboxDuration,
 			autoPunch = _G.AutoPunchEnabled,
-			autoPunchAim = _G.AutoPunchAimEnabled,
+			punchAim = _G.PunchAimEnabled,
+			deleteFakeNoli = deleteFakeNoli,
 			stabEnabled = stabEnabled,
 			stabRange = stabRange,
 			stabMode = stabMode,
@@ -333,7 +477,11 @@ local function LoadConfig()
 		if data.hitboxOffset then _G.HitboxOffset = data.hitboxOffset end
 		if data.hitboxDuration then _G.HitboxDuration = data.hitboxDuration end
 		if data.autoPunch ~= nil then _G.AutoPunchEnabled = data.autoPunch end
-		if data.autoPunchAim ~= nil then _G.AutoPunchAimEnabled = data.autoPunchAim end
+		if data.punchAim ~= nil then 
+			_G.PunchAimEnabled = data.punchAim 
+			togglePunchModule("Punch", _G.PunchAimEnabled)
+		end
+		if data.deleteFakeNoli ~= nil then deleteFakeNoli = data.deleteFakeNoli end
 		if data.stabEnabled ~= nil then stabEnabled = data.stabEnabled end
 		if data.stabRange ~= nil then stabRange = data.stabRange end
 		if data.stabMode ~= nil then stabMode = data.stabMode end
@@ -341,7 +489,7 @@ local function LoadConfig()
 	end)
 end
 
--- ===== AUTO BLOCK & AUTO PUNCH LOGIC =====
+-- ===== AUTO BLOCK LOGIC =====
 local MainUI, KillersFolder, SurvivorsFolder, Hitboxes
 
 local function GetObjects()
@@ -361,7 +509,6 @@ local function getActionButton(name)
 end
 
 local function getBlockButton() return getActionButton("Block") or getActionButton("Guard") end
-local function getPunchButton() return getActionButton("Punch") or getActionButton("Attack") or getActionButton("Slap") end
 
 local function pressButton(btn)
 	if not btn then return false end
@@ -375,7 +522,6 @@ local function pressButton(btn)
 end
 
 local function pressBlock() return pressButton(getBlockButton()) end
-local function pressPunch() return pressButton(getPunchButton()) end
 
 local function CreateBlockHitboxVisual()
 	local part = Instance.new("Part")
@@ -784,7 +930,7 @@ task.spawn(function()
 	end
 end)
 
--- ===== BACKSTAB & AUTO PUNCH LOOPS =====
+-- ===== BACKSTAB LOOPS =====
 local function clickDaggerButton()
 	local gui = LP.PlayerGui:FindFirstChild("MainUI")
 	local btn = gui and gui:FindFirstChild("AbilityContainer") and gui.AbilityContainer:FindFirstChild("Dagger")
@@ -978,6 +1124,7 @@ Lbl(page1, "STAMINA", 6)
 local speedBox = Box(page1, stamina.SprintSpeed, 28)
 local infButton = Btn(page1, "Inf Stamina " .. (infEnabled and "ON" or "OFF"), 60)
 local jumpButton = Btn(page1, "Jump " .. (jumpEnabled and "ON" or "OFF"), 94)
+
 -- PAGE 2: ESP FIXED
 local page2 = Instance.new("ScrollingFrame")
 page2.Size = UDim2.new(1, 0, 1, 0)
@@ -1004,7 +1151,7 @@ local graffitiESPBtn = Btn(page2, "Graffiti ESP " .. (ESPSettings.graffitiEsp an
 local groundBulbESPBtn = Btn(page2, "GroundBulb ESP " .. (ESPSettings.azureGroundBulbESP and "ON" or "OFF"), 328)
 local vineESPBtn = Btn(page2, "Vine ESP " .. (ESPSettings.azureVineESP and "ON" or "OFF"), 356)
 
--- PAGE 3: MISC
+-- PAGE 3: MISC (ĐÃ THÊM DELETE FAKE NOLI)
 local page3 = Instance.new("Frame")
 page3.Size = UDim2.new(1, 0, 1, 0)
 page3.BackgroundTransparency = 1
@@ -1015,8 +1162,9 @@ local keyButton = Btn(page3, "Hakari Key: " .. hakariKey.Name, 22)
 local solveButton = Btn(page3, "SOLVE", 50)
 local solveKeyBtn = Btn(page3, "Solve Key: " .. solveKey.Name, 78)
 local voidrushBtn = Btn(page3, "Voidrush Control " .. (voidrushcontrol and "ON" or "OFF"), 106)
+local deleteFakeNoliBtn = Btn(page3, "Delete Fake Noli " .. (deleteFakeNoli and "ON" or "OFF"), 134)
 
--- PAGE 4: BLOCK
+-- PAGE 4: BLOCK (ĐÃ THAY AUTOMATIC PUNCH AIM BẰNG PUNCH AIM TOGGLE)
 local page4 = Instance.new("ScrollingFrame")
 page4.Size = UDim2.new(1, 0, 1, 0)
 page4.CanvasSize = UDim2.new(0, 0, 0, 240)
@@ -1033,8 +1181,7 @@ Lbl(page4, "Scale | Offset Z | Duration", 74)
 local scaleBox = Box(page4, _G.HitboxScale, 90)
 local offsetBox = Box(page4, _G.HitboxOffset, 116)
 local durationBox = Box(page4, _G.HitboxDuration, 142)
-local autoPunchBtn = Btn(page4, "Auto Punch " .. (_G.AutoPunchEnabled and "ON" or "OFF"), 174)
-local autoPunchAimBtn = Btn(page4, "AutoPunch Aim " .. (_G.AutoPunchAimEnabled and "ON" or "OFF"), 202)
+local punchAimBtn = Btn(page4, "Punch Aim " .. (_G.PunchAimEnabled and "ON" or "OFF"), 174)
 
 -- PAGE 5: STAB
 local page5 = Instance.new("Frame")
@@ -1390,6 +1537,12 @@ voidrushBtn.MouseButton1Click:Connect(function()
 	SaveConfig()
 end)
 
+deleteFakeNoliBtn.MouseButton1Click:Connect(function()
+	deleteFakeNoli = not deleteFakeNoli
+	deleteFakeNoliBtn.Text = "Delete Fake Noli " .. (deleteFakeNoli and "ON" or "OFF")
+	SaveConfig()
+end)
+
 autoBlockBtn.MouseButton1Click:Connect(function()
 	_G.AutoBlockEnabled = not _G.AutoBlockEnabled
 	autoBlockBtn.Text = "Auto Block " .. (_G.AutoBlockEnabled and "ON" or "OFF")
@@ -1418,15 +1571,10 @@ durationBox.FocusLost:Connect(function()
 	if n and n > 0 then _G.HitboxDuration = n SaveConfig() else durationBox.Text = tostring(_G.HitboxDuration) end
 end)
 
-autoPunchBtn.MouseButton1Click:Connect(function()
-	_G.AutoPunchEnabled = not _G.AutoPunchEnabled
-	autoPunchBtn.Text = "Auto Punch " .. (_G.AutoPunchEnabled and "ON" or "OFF")
-	SaveConfig()
-end)
-
-autoPunchAimBtn.MouseButton1Click:Connect(function()
-	_G.AutoPunchAimEnabled = not _G.AutoPunchAimEnabled
-	autoPunchAimBtn.Text = "AutoPunch Aim " .. (_G.AutoPunchAimEnabled and "ON" or "OFF")
+punchAimBtn.MouseButton1Click:Connect(function()
+	_G.PunchAimEnabled = not _G.PunchAimEnabled
+	punchAimBtn.Text = "Punch Aim " .. (_G.PunchAimEnabled and "ON" or "OFF")
+	togglePunchModule("Punch", _G.PunchAimEnabled)
 	SaveConfig()
 end)
 
